@@ -1,5 +1,31 @@
 import type { WbsNode, WbsProject } from "@/types/wbs";
 
+export type WbsFlatRow = {
+  id: string;
+  code: string;
+  name: string;
+  depth: number;
+  isRoot: boolean;
+};
+
+export function flattenWbsTree(node: WbsNode, depth = 0): WbsFlatRow[] {
+  const rows: WbsFlatRow[] = [
+    {
+      id: node.id,
+      code: node.code,
+      name: node.name,
+      depth,
+      isRoot: depth === 0,
+    },
+  ];
+
+  for (const child of node.children) {
+    rows.push(...flattenWbsTree(child, depth + 1));
+  }
+
+  return rows;
+}
+
 export function createId(): string {
   return crypto.randomUUID();
 }

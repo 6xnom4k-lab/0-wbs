@@ -1,4 +1,4 @@
-import { WbsEditor } from "@/components/wbs-editor";
+import { redirect } from "next/navigation";
 
 type ProjectPageProps = {
   params: Promise<{ id: string }>;
@@ -7,5 +7,5 @@ type ProjectPageProps = {
 export default async function ProjectPage({ params }: ProjectPageProps) {
   const { id } = await params;
 
-  return <WbsEditor projectId={id} />;
+  redirect(`/projects/${id}/wbs`);
 }

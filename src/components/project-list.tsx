@@ -8,9 +8,13 @@ import {
   ChevronDownIcon,
   DeleteIcon,
   ExternalLinkIcon,
+  LayoutGridIcon,
   PlusIcon,
   SearchIcon,
+  TableRowsIcon,
 } from "@/components/icons";
+import { IconButton } from "@/components/icon-button";
+import { ViewModeToggle } from "@/components/view-mode-toggle";
 import {
   deleteProject as deleteStoredProject,
   listProjectSummaries,
@@ -18,6 +22,19 @@ import {
 } from "@/lib/project-store";
 import { createProject } from "@/lib/wbs";
 import type { WbsProjectSummary } from "@/types/wbs";
+
+type ProjectViewMode = "card" | "table";
+
+const VIEW_MODE_STORAGE_KEY = "0-wbs:project-view-mode";
+
+function readStoredViewMode(): ProjectViewMode {
+  if (typeof window === "undefined") {
+    return "card";
+  }
+
+  const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+  return stored === "table" ? "table" : "card";
+}
 
 function formatRelativeDate(value: string): string {
   const diffMs = Date.now() - new Date(value).getTime();
@@ -53,10 +70,15 @@ export function ProjectList() {
   const [projectName, setProjectName] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [viewMode, setViewMode] = useState<ProjectViewMode>("card");
 
   const refreshProjects = () => {
     setProjects(listProjectSummaries());
   };
+
+  useEffect(() => {
+    setViewMode(readStoredViewMode());
+  }, []);
 
   useEffect(() => {
     refreshProjects();
@@ -95,6 +117,11 @@ export function ProjectList() {
 
     deleteStoredProject(project.id);
     refreshProjects();
+  };
+
+  const handleViewModeChange = (nextViewMode: ProjectViewMode) => {
+    setViewMode(nextViewMode);
+    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, nextViewMode);
   };
 
   return (
@@ -161,9 +188,28 @@ export function ProjectList() {
       )}
 
       <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-400">Projects</h2>
-          <span className="text-xs text-zinc-600">{filteredProjects.length} total</span>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-medium text-zinc-400">Projects</h2>
+            <span className="text-xs text-zinc-600">{filteredProjects.length} total</span>
+          </div>
+
+          <ViewModeToggle
+            value={viewMode}
+            onChange={handleViewModeChange}
+            options={[
+              {
+                value: "card",
+                label: "カード表示",
+                icon: <LayoutGridIcon />,
+              },
+              {
+                value: "table",
+                label: "表表示",
+                icon: <TableRowsIcon />,
+              },
+            ]}
+          />
         </div>
 
         {!isReady ? (
@@ -188,7 +234,7 @@ export function ProjectList() {
               </button>
             )}
           </div>
-        ) : (
+        ) : viewMode === "card" ? (
           <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {filteredProjects.map((project) => (
               <li
@@ -240,6 +286,63 @@ export function ProjectList() {
               </li>
             ))}
           </ul>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse text-sm">
+                <thead className="bg-black/40 text-left text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  <tr>
+                    <th className="px-4 py-3">プロジェクト名</th>
+                    <th className="px-4 py-3">WBS項目数</th>
+                    <th className="px-4 py-3">更新日</th>
+                    <th className="px-4 py-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {filteredProjects.map((project) => (
+                    <tr
+                      key={project.id}
+                      className="transition hover:bg-zinc-900/50"
+                    >
+                      <td className="max-w-[16rem] truncate px-4 py-2.5 font-medium text-zinc-100">
+                        <Link
+                          href={`/projects/${project.id}`}
+                          className="transition hover:text-white"
+                          title={project.name}
+                        >
+                          {project.name}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-zinc-400">
+                        {project.nodeCount}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
+                        {formatRelativeDate(project.updatedAt)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <IconButton
+                            label={`${project.name} の WBS を開く`}
+                            href={`/projects/${project.id}`}
+                            tone="primary"
+                          >
+                            <ExternalLinkIcon className="h-4 w-4" />
+                          </IconButton>
+                          <IconButton
+                            label={`${project.name} を削除`}
+                            tone="danger"
+                            onClick={() => handleDeleteProject(project)}
+                          >
+                            <DeleteIcon className="h-4 w-4" />
+                          </IconButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </section>
     </div>
