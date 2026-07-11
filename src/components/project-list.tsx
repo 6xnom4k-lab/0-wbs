@@ -61,14 +61,11 @@ export function ProjectList() {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
       <header className="space-y-2">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-zinc-500">
-          0-wbs
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-          プロジェクト一覧
-        </h1>
+        <h2 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+          プロジェクト管理
+        </h2>
         <p className="max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-          マスター管理画面でプロジェクトを作成・選択し、各プロジェクトの WBS を編集します。
+          プロジェクトを作成・選択し、各プロジェクトの WBS を編集します。
         </p>
       </header>
 
