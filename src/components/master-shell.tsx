@@ -8,22 +8,25 @@ type MasterShellProps = {
 
 export function MasterShell({ children }: MasterShellProps) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-black text-zinc-100">
       <div className="hidden shrink-0 md:block">
         <MasterSidebar />
       </div>
 
-      <div className="flex min-h-screen flex-1 flex-col">
-        <div className="border-b border-zinc-200 bg-white px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950 md:hidden">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-zinc-500">
-            0-wbs
-          </p>
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <div className="border-b border-zinc-800 bg-black px-4 py-3 md:hidden">
+          <div className="flex items-center gap-3">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-zinc-100 to-zinc-400 text-[10px] font-bold text-black">
+              0
+            </div>
+            <p className="text-sm font-medium text-white">0-wbs</p>
+          </div>
           <div className="mt-3 flex gap-2">
             <MasterMobileNav />
           </div>
         </div>
 
-        <main className="flex-1 bg-white dark:bg-black">{children}</main>
+        <main className="flex-1">{children}</main>
       </div>
     </div>
   );
@@ -34,15 +37,15 @@ function MasterMobileNav() {
     <>
       <Link
         href="/"
-        className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium dark:border-zinc-800"
+        className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300"
       >
-        プロジェクト
+        Projects
       </Link>
       <Link
         href="/account"
-        className="rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium dark:border-zinc-800"
+        className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300"
       >
-        アカウント
+        Accounts
       </Link>
     </>
   );

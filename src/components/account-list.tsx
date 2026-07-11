@@ -125,40 +125,36 @@ export function AccountList() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
+    <div className="flex w-full flex-col gap-6 px-6 py-8 md:px-10">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-              アカウント管理
-            </h2>
-            <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              登録済みアカウントを表形式で確認・編集できます。
-            </p>
+            <p className="text-sm text-zinc-500">Accounts</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Overview</h1>
           </div>
 
           <Link
             href="/account/new"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-700 bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-zinc-200"
           >
             <PlusIcon />
-            新規作成
+            Add New
           </Link>
         </header>
 
         {importMessage && (
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <p className="rounded-lg border border-emerald-900/40 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-300">
             {importMessage}
           </p>
         )}
 
         <div className="flex items-center justify-between gap-3">
           <div className="relative min-w-0 flex-1 sm:max-w-md">
-            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="名前、メール、部署、役職で検索"
-              className="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+              placeholder="Search Accounts..."
+              className="w-full rounded-md border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-200 outline-none focus:border-zinc-600"
             />
           </div>
 
@@ -167,7 +163,7 @@ export function AccountList() {
               type="button"
               onClick={handleExportCsv}
               title="一覧をダウンロード"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-700 transition hover:bg-sky-500/20 dark:text-sky-300"
+              className="inline-flex items-center gap-1.5 rounded-md border border-sky-800/60 bg-sky-950/40 px-3 py-2 text-sm font-medium text-sky-300 transition hover:bg-sky-950/70"
             >
               <DownloadIcon className="h-4 w-4" />
               出力
@@ -177,7 +173,7 @@ export function AccountList() {
               type="button"
               onClick={handleImportClick}
               title="ファイルから取り込む"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300"
+              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-950/70"
             >
               <UploadIcon className="h-4 w-4" />
               一括登録
@@ -193,7 +189,7 @@ export function AccountList() {
           </div>
         </div>
 
-        <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <section className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
           {filteredAccounts.length > 0 && (
             <Pagination
               currentPage={pagination.currentPage}
@@ -215,7 +211,7 @@ export function AccountList() {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse text-sm">
-                <thead className="bg-zinc-50 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:bg-zinc-900/60">
+                <thead className="bg-black/40 text-left text-xs font-medium uppercase tracking-wide text-zinc-500">
                   <tr>
                     <th className="px-4 py-3">表示名</th>
                     <th className="px-4 py-3">メール</th>
@@ -226,29 +222,29 @@ export function AccountList() {
                     <th className="px-4 py-3 text-right">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                <tbody className="divide-y divide-zinc-800">
                   {pagination.items.map((account) => (
                     <tr
                       key={account.id}
-                      className="transition hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                      className="transition hover:bg-zinc-900/50"
                     >
                       <td
-                        className="max-w-[12rem] truncate px-4 py-2.5 font-medium text-zinc-900 dark:text-zinc-100"
+                        className="max-w-[12rem] truncate px-4 py-2.5 font-medium text-zinc-100"
                         title={getAccountLabel(account.displayName, account.email)}
                       >
                         {getAccountLabel(account.displayName, account.email)}
                       </td>
-                      <td className="max-w-[14rem] truncate px-4 py-2.5 text-zinc-600 dark:text-zinc-400">
+                      <td className="max-w-[14rem] truncate px-4 py-2.5 text-zinc-400">
                         {displayCellValue(account.email)}
                       </td>
-                      <td className="hidden max-w-[10rem] truncate px-4 py-2.5 text-zinc-600 dark:text-zinc-400 md:table-cell">
+                      <td className="hidden max-w-[10rem] truncate px-4 py-2.5 text-zinc-400 md:table-cell">
                         {displayCellValue(account.department)}
                       </td>
-                      <td className="hidden max-w-[10rem] truncate px-4 py-2.5 text-zinc-600 dark:text-zinc-400 lg:table-cell">
+                      <td className="hidden max-w-[10rem] truncate px-4 py-2.5 text-zinc-400 lg:table-cell">
                         {displayCellValue(account.role)}
                       </td>
                       <td className="hidden px-4 py-2.5 md:table-cell">
-                        <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-400 dark:bg-zinc-900 dark:text-zinc-500">
+                        <span className="inline-flex rounded-full bg-zinc-900 px-2.5 py-1 text-xs text-zinc-500">
                           {displayPermissionValue(account.permission)}
                         </span>
                       </td>

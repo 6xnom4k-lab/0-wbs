@@ -8,7 +8,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
   const pages = buildPageNumbers(currentPage, totalPages);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
       <p className="text-sm text-zinc-500">
         {currentPage} / {totalPages} ページ
       </p>
@@ -18,7 +18,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
           type="button"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage <= 1}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
         >
           前へ
         </button>
@@ -33,10 +33,10 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
               key={page}
               type="button"
               onClick={() => onPageChange(page)}
-              className={`min-w-8 rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+              className={`min-w-8 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
                 page === currentPage
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "border border-zinc-300 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  ? "bg-white text-black"
+                  : "border border-zinc-700 text-zinc-300 hover:bg-zinc-900"
               }`}
             >
               {page}
@@ -48,7 +48,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
           type="button"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage >= totalPages}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
         >
           次へ
         </button>

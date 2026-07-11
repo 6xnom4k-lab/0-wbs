@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { FolderIcon, SearchIcon, UsersIcon } from "@/components/icons";
+
 const menuItems = [
   {
     href: "/",
-    label: "プロジェクト管理",
-    description: "プロジェクトの作成・一覧・削除",
+    label: "Projects",
+    icon: FolderIcon,
   },
   {
     href: "/account",
-    label: "アカウント管理",
-    description: "プロフィール情報の確認・編集",
+    label: "Accounts",
+    icon: UsersIcon,
   },
 ] as const;
 
@@ -20,47 +22,62 @@ export function MasterSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 flex h-screen w-72 flex-col border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="border-b border-zinc-200 px-5 py-6 dark:border-zinc-800">
-        <p className="text-sm font-medium uppercase tracking-[0.2em] text-zinc-500">
-          0-wbs
-        </p>
-        <h1 className="mt-2 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-          マスター管理
-        </h1>
+    <aside className="sticky top-0 flex h-screen w-60 flex-col border-r border-zinc-800 bg-black text-zinc-300">
+      <div className="border-b border-zinc-800 px-4 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-zinc-100 to-zinc-400 text-xs font-bold text-black">
+            0
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-white">0-wbs</p>
+            <p className="truncate text-xs text-zinc-500">Master</p>
+          </div>
+        </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-2 p-4">
+      <div className="px-3 py-3">
+        <label className="relative block">
+          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+          <input
+            readOnly
+            placeholder="Find..."
+            className="w-full cursor-default rounded-md border border-zinc-800 bg-zinc-950 px-9 py-2 text-xs text-zinc-400 outline-none"
+          />
+          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-500">
+            /
+          </span>
+        </label>
+      </div>
+
+      <nav className="flex flex-1 flex-col gap-0.5 px-2">
         {menuItems.map((item) => {
           const isActive =
             item.href === "/"
               ? pathname === "/"
               : pathname.startsWith(item.href);
+          const Icon = item.icon;
 
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-xl px-4 py-3 transition ${
+              className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition ${
                 isActive
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  ? "bg-zinc-900 text-white"
+                  : "text-zinc-400 hover:bg-zinc-900/60 hover:text-white"
               }`}
             >
-              <span className="block text-sm font-medium">{item.label}</span>
-              <span
-                className={`mt-1 block text-xs ${
-                  isActive
-                    ? "text-zinc-300 dark:text-zinc-600"
-                    : "text-zinc-500 dark:text-zinc-500"
-                }`}
-              >
-                {item.description}
-              </span>
+              <Icon className="h-4 w-4 shrink-0" />
+              <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
+
+      <div className="border-t border-zinc-800 px-4 py-3">
+        <p className="text-xs text-zinc-500">Workspace</p>
+        <p className="mt-1 truncate text-sm text-zinc-300">0-wbs</p>
+      </div>
     </aside>
   );
 }
