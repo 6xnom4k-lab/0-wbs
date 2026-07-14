@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -78,14 +78,62 @@ function parseEffort(value: string): number | undefined {
   return parsed;
 }
 
+function normalizeUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
 function normalizeLinks(links: WbsTaskLink[]): WbsTaskLink[] {
   return links
     .map((link) => ({
       id: link.id,
       title: link.title.trim(),
-      url: link.url.trim(),
+      url: normalizeUrl(link.url),
     }))
     .filter((link) => link.title || link.url);
+}
+
+function draftToPersistedFields(draft: TaskDraft) {
+  return {
+    description: draft.description.trim(),
+    notes: draft.notes,
+    content: draft.content,
+    links: normalizeLinks(draft.links),
+    assignee: draft.assignee.trim(),
+    startDate: draft.startDate || undefined,
+    endDate: draft.endDate || undefined,
+    status: draft.status,
+    effort: parseEffort(draft.effort),
+  };
+}
+
+function nodeToPersistedFields(node: WbsNode) {
+  return draftToPersistedFields(nodeToDraft(node));
+}
+
+function persistedFieldsEqual(
+  left: ReturnType<typeof draftToPersistedFields>,
+  right: ReturnType<typeof draftToPersistedFields>,
+): boolean {
+  return (
+    left.description === right.description &&
+    left.notes === right.notes &&
+    left.content === right.content &&
+    left.assignee === right.assignee &&
+    left.startDate === right.startDate &&
+    left.endDate === right.endDate &&
+    left.status === right.status &&
+    left.effort === right.effort &&
+    linksEqual(left.links, right.links)
+  );
 }
 
 function linksEqual(left: WbsTaskLink[], right: WbsTaskLink[]): boolean {
@@ -102,16 +150,9 @@ function linksEqual(left: WbsTaskLink[], right: WbsTaskLink[]): boolean {
 }
 
 function draftsEqual(left: TaskDraft, right: TaskDraft): boolean {
-  return (
-    left.description === right.description &&
-    left.notes === right.notes &&
-    left.content === right.content &&
-    linksEqual(left.links, right.links) &&
-    left.assignee === right.assignee &&
-    left.startDate === right.startDate &&
-    left.endDate === right.endDate &&
-    left.status === right.status &&
-    left.effort === right.effort
+  return persistedFieldsEqual(
+    draftToPersistedFields(left),
+    draftToPersistedFields(right),
   );
 }
 
@@ -123,6 +164,10 @@ function createLink(): WbsTaskLink {
   };
 }
 
+function isLinkComplete(link: WbsTaskLink): boolean {
+  return Boolean(normalizeUrl(link.url));
+}
+
 function TaskLinksEditor({
   links,
   onChange,
@@ -130,70 +175,227 @@ function TaskLinksEditor({
   links: WbsTaskLink[];
   onChange: (links: WbsTaskLink[]) => void;
 }) {
+  const pendingFocusId = useRef<string | null>(null);
+  const [editingIds, setEditingIds] = useState<Set<string>>(() => new Set());
+
   const updateLink = (id: string, partial: Partial<WbsTaskLink>) => {
     onChange(links.map((link) => (link.id === id ? { ...link, ...partial } : link)));
   };
 
   const removeLink = (id: string) => {
     onChange(links.filter((link) => link.id !== id));
+    setEditingIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const addLink = () => {
+    const next = createLink();
+    pendingFocusId.current = next.id;
+    setEditingIds((current) => new Set(current).add(next.id));
+    onChange([...links, next]);
+  };
+
+  const startEditing = (id: string) => {
+    setEditingIds((current) => new Set(current).add(id));
+  };
+
+  const finishEditing = (id: string) => {
+    setEditingIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
   };
 
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      onMouseDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+    >
       {links.length === 0 && (
         <p className="text-xs text-zinc-600">Google ドキュメントや共有リンクを追加できます。</p>
       )}
 
-      {links.map((link) => (
-        <div
-          key={link.id}
-          className="rounded-lg border border-zinc-800 bg-black/40 p-3"
-        >
-          <div className="grid gap-2">
-            <input
-              value={link.title}
-              onChange={(event) => updateLink(link.id, { title: event.target.value })}
-              placeholder="資料名（例: 要件定義書）"
-              className={fieldClassName}
+      {links.map((link) => {
+        const isEditing = editingIds.has(link.id) || !isLinkComplete(link);
+
+        if (isEditing) {
+          return (
+            <LinkEditRow
+              key={link.id}
+              link={link}
+              shouldFocus={pendingFocusId.current === link.id}
+              onFocused={() => {
+                pendingFocusId.current = null;
+              }}
+              onUpdate={(partial) => updateLink(link.id, partial)}
+              onSave={(savedLink) => {
+                updateLink(link.id, savedLink);
+                finishEditing(link.id);
+              }}
+              onRemove={() => removeLink(link.id)}
             />
-            <div className="flex gap-2">
-              <input
-                value={link.url}
-                onChange={(event) => updateLink(link.id, { url: event.target.value })}
-                placeholder="https://..."
-                className={fieldClassName}
-              />
-              {link.url.trim() && (
-                <a
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-800 text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
-                  aria-label={`${link.title || "資料"}を開く`}
-                >
-                  <ExternalLinkIcon className="h-4 w-4" />
-                </a>
-              )}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => removeLink(link.id)}
-            className="mt-2 text-xs text-zinc-500 transition hover:text-red-400"
-          >
-            削除
-          </button>
-        </div>
-      ))}
+          );
+        }
+
+        return (
+          <LinkCompactRow
+            key={link.id}
+            link={link}
+            onEdit={() => startEditing(link.id)}
+            onRemove={() => removeLink(link.id)}
+          />
+        );
+      })}
 
       <button
         type="button"
-        onClick={() => onChange([...links, createLink()])}
+        onClick={addLink}
         className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
       >
         <PlusIcon className="h-3.5 w-3.5" />
         リンクを追加
       </button>
+    </div>
+  );
+}
+
+function LinkCompactRow({
+  link,
+  onEdit,
+  onRemove,
+}: {
+  link: WbsTaskLink;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const normalizedUrl = normalizeUrl(link.url);
+  const label = link.title.trim() || normalizedUrl;
+
+  return (
+    <div className="group/link flex items-center gap-2 rounded-lg border border-zinc-800/80 bg-black/30 px-2.5 py-1.5">
+      <ExternalLinkIcon className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+      <span className="min-w-0 flex-1 truncate text-xs text-zinc-300" title={label}>
+        {label}
+      </span>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition group-hover/link:opacity-100">
+        <a
+          href={normalizedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-200"
+          aria-label={`${label}を開く`}
+          title="開く"
+        >
+          <ExternalLinkIcon className="h-3 w-3" />
+        </a>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded px-1.5 py-0.5 text-[10px] text-zinc-500 transition hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          編集
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded px-1.5 py-0.5 text-[10px] text-zinc-500 transition hover:bg-zinc-800 hover:text-red-400"
+        >
+          削除
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LinkEditRow({
+  link,
+  shouldFocus,
+  onFocused,
+  onUpdate,
+  onSave,
+  onRemove,
+}: {
+  link: WbsTaskLink;
+  shouldFocus: boolean;
+  onFocused: () => void;
+  onUpdate: (partial: Partial<WbsTaskLink>) => void;
+  onSave: (savedLink: Pick<WbsTaskLink, "title" | "url">) => void;
+  onRemove: () => void;
+}) {
+  const titleRef = useRef<HTMLInputElement>(null);
+  const [urlError, setUrlError] = useState(false);
+
+  useEffect(() => {
+    if (shouldFocus) {
+      titleRef.current?.focus();
+      onFocused();
+    }
+  }, [shouldFocus, onFocused]);
+
+  const handleSave = () => {
+    const url = normalizeUrl(link.url);
+    if (!url) {
+      setUrlError(true);
+      return;
+    }
+
+    setUrlError(false);
+    onSave({
+      title: link.title.trim() || url,
+      url,
+    });
+  };
+
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-black/40 p-3">
+      <div className="grid gap-2">
+        <input
+          ref={titleRef}
+          value={link.title}
+          onChange={(event) => onUpdate({ title: event.target.value })}
+          placeholder="資料名（例: 要件定義書）"
+          className={fieldClassName}
+        />
+        <input
+          value={link.url}
+          onChange={(event) => {
+            setUrlError(false);
+            onUpdate({ url: event.target.value });
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              handleSave();
+            }
+          }}
+          placeholder="https://docs.google.com/..."
+          className={`${fieldClassName} ${urlError ? "border-red-500/70 focus:border-red-500" : ""}`}
+        />
+        {urlError && (
+          <p className="text-xs text-red-400">URL を入力してください。</p>
+        )}
+      </div>
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded-md px-2.5 py-1 text-xs text-zinc-500 transition hover:text-red-400"
+        >
+          削除
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="rounded-md bg-white px-3 py-1 text-xs font-medium text-black transition hover:bg-zinc-200"
+        >
+          保存
+        </button>
+      </div>
     </div>
   );
 }
@@ -220,6 +422,13 @@ export function WbsTaskPanel({
     links: [],
   });
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const draftRef = useRef(draft);
+  const projectRef = useRef(project);
+  const saveTimerRef = useRef<number | null>(null);
+  const loadedNodeIdRef = useRef<string | null>(null);
+
+  draftRef.current = draft;
+  projectRef.current = project;
 
   const node = useMemo(() => findNode(project.root, nodeId), [project.root, nodeId]);
 
@@ -236,16 +445,86 @@ export function WbsTaskPanel({
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  const persistDraft = useCallback(
+    (nextDraft: TaskDraft, options?: { syncDraft?: boolean }) => {
+      const currentNode = findNode(projectRef.current.root, nodeId);
+      if (!currentNode) {
+        return;
+      }
+
+      const persisted = draftToPersistedFields(nextDraft);
+      if (persistedFieldsEqual(persisted, nodeToPersistedFields(currentNode))) {
+        return;
+      }
+
+      const nextProject = touchProject({
+        ...projectRef.current,
+        root: updateNode(projectRef.current.root, nodeId, (current) => ({
+          ...current,
+          ...persisted,
+        })),
+      });
+
+      onProjectChange(nextProject);
+      saveProject(nextProject);
+      setSaveState("saved");
+
+      if (options?.syncDraft) {
+        const inProgressLinks = nextDraft.links.filter(
+          (link) => !link.title.trim() && !link.url.trim(),
+        );
+        setDraft({
+          ...nextDraft,
+          links: [...persisted.links, ...inProgressLinks],
+        });
+      }
+    },
+    [nodeId, onProjectChange],
+  );
+
+  const flushDraft = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    persistDraft(draftRef.current, { syncDraft: true });
+  }, [persistDraft]);
+
   useEffect(() => {
     if (!node) {
       onClose();
       return;
     }
 
+    const previousNodeId = loadedNodeIdRef.current;
+    if (previousNodeId && previousNodeId !== nodeId) {
+      const previousNode = findNode(projectRef.current.root, previousNodeId);
+      if (previousNode) {
+        const persisted = draftToPersistedFields(draftRef.current);
+        if (!persistedFieldsEqual(persisted, nodeToPersistedFields(previousNode))) {
+          const previousProject = touchProject({
+            ...projectRef.current,
+            root: updateNode(projectRef.current.root, previousNodeId, (current) => ({
+              ...current,
+              ...persisted,
+            })),
+          });
+          onProjectChange(previousProject);
+          saveProject(previousProject);
+        }
+      }
+    }
+
+    if (previousNodeId === nodeId) {
+      return;
+    }
+
     setDraft(nodeToDraft(node));
     setSaveState("idle");
     setExpanded(false);
-  }, [node, nodeId, onClose]);
+    loadedNodeIdRef.current = nodeId;
+  }, [node, nodeId, onClose, onProjectChange]);
 
   useEffect(() => {
     if (!node) {
@@ -257,30 +536,28 @@ export function WbsTaskPanel({
     }
 
     setSaveState("saving");
-    const timer = window.setTimeout(() => {
-      const nextProject = touchProject({
-        ...project,
-        root: updateNode(project.root, nodeId, (current) => ({
-          ...current,
-          description: draft.description.trim(),
-          notes: draft.notes,
-          content: draft.content,
-          links: normalizeLinks(draft.links),
-          assignee: draft.assignee.trim(),
-          startDate: draft.startDate || undefined,
-          endDate: draft.endDate || undefined,
-          status: draft.status,
-          effort: parseEffort(draft.effort),
-        })),
-      });
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+    }
 
-      onProjectChange(nextProject);
-      saveProject(nextProject);
-      setSaveState("saved");
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      persistDraft(draftRef.current, { syncDraft: true });
     }, 400);
 
-    return () => window.clearTimeout(timer);
-  }, [draft, node, nodeId, onProjectChange, project]);
+    return () => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [draft, node, persistDraft]);
+
+  useEffect(() => {
+    return () => {
+      flushDraft();
+    };
+  }, [flushDraft]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -293,15 +570,17 @@ export function WbsTaskPanel({
         return;
       }
 
+      flushDraft();
       setVisible(false);
       window.setTimeout(onClose, 220);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, expanded]);
+  }, [onClose, expanded, flushDraft]);
 
   const handleClose = () => {
+    flushDraft();
     setVisible(false);
     window.setTimeout(onClose, 220);
   };
@@ -324,6 +603,7 @@ export function WbsTaskPanel({
         <button
           type="button"
           aria-label="パネルを閉じる"
+          onMouseDown={(event) => event.preventDefault()}
           onClick={handleClose}
           className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${
             visible ? "opacity-100" : "opacity-0"
@@ -335,6 +615,7 @@ export function WbsTaskPanel({
         role="dialog"
         aria-modal="true"
         aria-label={`${node.code} ${node.name}`}
+        onMouseDown={(event) => event.stopPropagation()}
         className={`relative flex h-full flex-col bg-zinc-950 transition-all duration-300 ease-out ${
           visible ? "translate-x-0" : "translate-x-full"
         } ${
@@ -524,6 +805,7 @@ export function WbsTaskPanel({
             <section className="space-y-2">
               <h3 className="text-sm font-medium text-zinc-300">関連リンク</h3>
               <TaskLinksEditor
+                key={nodeId}
                 links={draft.links}
                 onChange={(links) => updateDraft({ links })}
               />
