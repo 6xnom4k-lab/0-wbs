@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MasterSidebar } from "@/components/master-sidebar";
+import { StorageStatusBanner } from "@/components/storage-status-banner";
 
 type MasterShellProps = {
   children: React.ReactNode;
@@ -26,6 +27,7 @@ export function MasterShell({ children }: MasterShellProps) {
           </div>
         </div>
 
+        <StorageStatusBanner />
         <main className="flex-1">{children}</main>
       </div>
     </div>

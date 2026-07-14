@@ -1,9 +1,22 @@
 import type { Account, AccountInput } from "@/types/account";
 
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createId } from "@/lib/wbs";
 
 const ACCOUNTS_STORAGE_KEY = "0-wbs:accounts";
 const LEGACY_ACCOUNT_STORAGE_KEY = "0-wbs:account";
+
+type AccountRow = {
+  id: string;
+  display_name: string;
+  email: string;
+  department: string;
+  role: string;
+  permission: string;
+  created_at: string;
+  updated_at: string;
+};
 
 function normalizeAccount(account: Account): Account {
   return {
@@ -12,7 +25,7 @@ function normalizeAccount(account: Account): Account {
   };
 }
 
-function readAccounts(): Account[] {
+function readLocalAccounts(): Account[] {
   if (typeof window === "undefined") {
     return [];
   }
@@ -31,7 +44,7 @@ function readAccounts(): Account[] {
   }
 }
 
-function writeAccounts(accounts: Account[]): void {
+function writeLocalAccounts(accounts: Account[]): void {
   window.localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
 }
 
@@ -59,7 +72,7 @@ function migrateLegacyAccount(): void {
         updatedAt: legacy.updatedAt ?? now,
       };
 
-      writeAccounts([migrated]);
+      writeLocalAccounts([migrated]);
     }
   } catch {
     // Ignore invalid legacy data.
@@ -68,21 +81,84 @@ function migrateLegacyAccount(): void {
   window.localStorage.removeItem(LEGACY_ACCOUNT_STORAGE_KEY);
 }
 
-export function listAccounts(): Account[] {
-  return readAccounts().sort(
-    (left, right) =>
-      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
-  );
+function rowToAccount(row: AccountRow): Account {
+  return normalizeAccount({
+    id: row.id,
+    displayName: row.display_name,
+    email: row.email,
+    department: row.department,
+    role: row.role,
+    permission: row.permission,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
 }
 
-export function getAccount(id: string): Account | null {
-  return readAccounts().find((account) => account.id === id) ?? null;
+function accountToRow(account: Account): AccountRow {
+  return {
+    id: account.id,
+    display_name: account.displayName,
+    email: account.email,
+    department: account.department,
+    role: account.role,
+    permission: account.permission,
+    created_at: account.createdAt,
+    updated_at: account.updatedAt,
+  };
 }
 
-export function createAccount(
+async function listAccountsFromSupabase(): Promise<Account[]> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("wbs_accounts")
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as AccountRow[]).map(rowToAccount);
+}
+
+async function getAccountFromSupabase(id: string): Promise<Account | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("wbs_accounts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ? rowToAccount(data as AccountRow) : null;
+}
+
+export async function listAccounts(): Promise<Account[]> {
+  if (!isSupabaseConfigured()) {
+    return readLocalAccounts().sort(
+      (left, right) =>
+        new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+    );
+  }
+
+  return listAccountsFromSupabase();
+}
+
+export async function getAccount(id: string): Promise<Account | null> {
+  if (!isSupabaseConfigured()) {
+    return readLocalAccounts().find((account) => account.id === id) ?? null;
+  }
+
+  return getAccountFromSupabase(id);
+}
+
+export async function createAccount(
   input: AccountInput,
   options?: { permission?: string },
-): Account {
+): Promise<Account> {
   const now = new Date().toISOString();
   const account: Account = {
     id: createId(),
@@ -95,7 +171,18 @@ export function createAccount(
     updatedAt: now,
   };
 
-  writeAccounts([account, ...readAccounts()]);
+  if (!isSupabaseConfigured()) {
+    writeLocalAccounts([account, ...readLocalAccounts()]);
+    return account;
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from("wbs_accounts").insert(accountToRow(account));
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
   return account;
 }
 
@@ -104,9 +191,9 @@ export type AccountBulkImportResult = {
   errors: string[];
 };
 
-export function importAccounts(
+export async function importAccounts(
   rows: Array<AccountInput & { permission?: string }>,
-): AccountBulkImportResult {
+): Promise<AccountBulkImportResult> {
   const created: Account[] = [];
   const errors: string[] = [];
 
@@ -129,26 +216,56 @@ export function importAccounts(
     });
   });
 
-  if (created.length > 0) {
-    writeAccounts([...created, ...readAccounts()]);
+  if (created.length === 0) {
+    return { imported: 0, errors };
   }
 
-  return {
-    imported: created.length,
-    errors,
-  };
+  if (!isSupabaseConfigured()) {
+    writeLocalAccounts([...created, ...readLocalAccounts()]);
+    return { imported: created.length, errors };
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from("wbs_accounts").insert(created.map(accountToRow));
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { imported: created.length, errors };
 }
 
-export function updateAccount(id: string, input: AccountInput): Account | null {
-  const accounts = readAccounts();
-  const index = accounts.findIndex((account) => account.id === id);
+export async function updateAccount(id: string, input: AccountInput): Promise<Account | null> {
+  if (!isSupabaseConfigured()) {
+    const accounts = readLocalAccounts();
+    const index = accounts.findIndex((account) => account.id === id);
 
-  if (index === -1) {
+    if (index === -1) {
+      return null;
+    }
+
+    const updated: Account = {
+      ...accounts[index],
+      displayName: input.displayName.trim(),
+      email: input.email.trim(),
+      department: input.department.trim(),
+      role: input.role.trim(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const nextAccounts = [...accounts];
+    nextAccounts[index] = updated;
+    writeLocalAccounts(nextAccounts);
+    return updated;
+  }
+
+  const existing = await getAccountFromSupabase(id);
+  if (!existing) {
     return null;
   }
 
   const updated: Account = {
-    ...accounts[index],
+    ...existing,
     displayName: input.displayName.trim(),
     email: input.email.trim(),
     department: input.department.trim(),
@@ -156,12 +273,26 @@ export function updateAccount(id: string, input: AccountInput): Account | null {
     updatedAt: new Date().toISOString(),
   };
 
-  const nextAccounts = [...accounts];
-  nextAccounts[index] = updated;
-  writeAccounts(nextAccounts);
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from("wbs_accounts").upsert(accountToRow(updated));
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
   return updated;
 }
 
-export function deleteAccount(id: string): void {
-  writeAccounts(readAccounts().filter((account) => account.id !== id));
+export async function deleteAccount(id: string): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    writeLocalAccounts(readLocalAccounts().filter((account) => account.id !== id));
+    return;
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from("wbs_accounts").delete().eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }

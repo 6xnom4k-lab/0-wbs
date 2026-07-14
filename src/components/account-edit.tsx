@@ -19,14 +19,16 @@ export function AccountEdit({ accountId }: AccountEditProps) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const storedAccount = getAccount(accountId);
-    if (!storedAccount) {
-      router.replace("/account");
-      return;
-    }
+    void (async () => {
+      const storedAccount = await getAccount(accountId);
+      if (!storedAccount) {
+        router.replace("/account");
+        return;
+      }
 
-    setAccount(storedAccount);
-    setIsReady(true);
+      setAccount(storedAccount);
+      setIsReady(true);
+    })();
   }, [accountId, router]);
 
   if (!isReady || !account) {
@@ -66,8 +68,8 @@ export function AccountEdit({ accountId }: AccountEditProps) {
             role: account.role,
           }}
           submitLabel="更新"
-          onSubmit={(values) => {
-            const updated = updateAccount(account.id, values);
+          onSubmit={async (values) => {
+            const updated = await updateAccount(account.id, values);
             if (updated) {
               router.push("/account");
             }

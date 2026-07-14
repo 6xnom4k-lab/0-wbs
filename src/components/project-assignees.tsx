@@ -15,13 +15,15 @@ export function ProjectAssignees({ projectId }: ProjectAssigneesProps) {
   const [projectName, setProjectName] = useState<string | null>(null);
 
   useEffect(() => {
-    const project = getProject(projectId);
-    if (!project) {
-      router.replace("/");
-      return;
-    }
+    void (async () => {
+      const project = await getProject(projectId);
+      if (!project) {
+        router.replace("/");
+        return;
+      }
 
-    setProjectName(project.name);
+      setProjectName(project.name);
+    })();
   }, [projectId, router]);
 
   if (!projectName) {

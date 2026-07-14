@@ -43,26 +43,32 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
   const [formError, setFormError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
-  const refreshTasks = () => {
-    setTasks(listProjectTasks(projectId));
+  const [categories, setCategories] = useState<string[]>([]);
+
+  const refreshTasks = async () => {
+    const [nextTasks, nextCategories] = await Promise.all([
+      listProjectTasks(projectId),
+      listProjectTaskCategories(projectId),
+    ]);
+    setTasks(nextTasks);
+    setCategories(nextCategories);
   };
 
   useEffect(() => {
-    const project = getProject(projectId);
-    if (!project) {
-      router.replace("/");
-      return;
-    }
+    void (async () => {
+      const project = await getProject(projectId);
+      if (!project) {
+        router.replace("/");
+        return;
+      }
 
-    setProjectName(project.name);
-    refreshTasks();
-    setIsReady(true);
+      setProjectName(project.name);
+      await refreshTasks();
+      setIsReady(true);
+    })();
   }, [projectId, router]);
 
-  const categorySuggestions = useMemo(
-    () => listProjectTaskCategories(projectId),
-    [projectId, tasks],
-  );
+  const categorySuggestions = categories;
 
   const filteredTasks = useMemo(
     () => tasks.filter((task) => matchesTaskQuery(task, query)),
@@ -85,7 +91,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
     return emptyTaskInput();
   }, [formMode.type, editingTask]);
 
-  const handleSubmit = (input: TaskInput) => {
+  const handleSubmit = async (input: TaskInput) => {
     const error = validateTaskInput(input);
     if (error) {
       setFormError(error);
@@ -93,28 +99,28 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
     }
 
     if (formMode.type === "edit") {
-      updateProjectTask(projectId, formMode.taskId, input);
+      await updateProjectTask(projectId, formMode.taskId, input);
     } else {
-      createProjectTask(projectId, input);
+      await createProjectTask(projectId, input);
     }
 
     setFormError(null);
     setFormMode({ type: "closed" });
-    refreshTasks();
+    await refreshTasks();
   };
 
-  const handleDelete = (task: ProjectTask) => {
+  const handleDelete = async (task: ProjectTask) => {
     const label = task.category ? `${task.category} / ${task.title}` : task.title;
     const confirmed = window.confirm(`「${label}」を削除しますか？`);
     if (!confirmed) {
       return;
     }
 
-    deleteProjectTask(projectId, task.id);
+    await deleteProjectTask(projectId, task.id);
     if (formMode.type === "edit" && formMode.taskId === task.id) {
       setFormMode({ type: "closed" });
     }
-    refreshTasks();
+    await refreshTasks();
   };
 
   if (!projectName) {

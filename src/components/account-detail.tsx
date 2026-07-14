@@ -20,14 +20,16 @@ export function AccountDetail({ accountId }: AccountDetailProps) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const storedAccount = getAccount(accountId);
-    if (!storedAccount) {
-      router.replace("/account");
-      return;
-    }
+    void (async () => {
+      const storedAccount = await getAccount(accountId);
+      if (!storedAccount) {
+        router.replace("/account");
+        return;
+      }
 
-    setAccount(storedAccount);
-    setIsReady(true);
+      setAccount(storedAccount);
+      setIsReady(true);
+    })();
   }, [accountId, router]);
 
   if (!isReady || !account) {

@@ -34,10 +34,11 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
   const [projectName, setProjectName] = useState("プロジェクト");
 
   useEffect(() => {
-    const project = getProject(projectId);
-    if (project) {
-      setProjectName(project.name);
-    }
+    void getProject(projectId).then((project) => {
+      if (project) {
+        setProjectName(project.name);
+      }
+    });
   }, [projectId]);
 
   return (

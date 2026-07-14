@@ -18,7 +18,9 @@ import { ViewModeToggle } from "@/components/view-mode-toggle";
 import {
   deleteProject as deleteStoredProject,
   listProjectSummaries,
+  migrateLocalProjectsToSupabase,
   saveProject,
+  usesSupabaseStorage,
 } from "@/lib/project-store";
 import { createProject } from "@/lib/wbs";
 import type { WbsProjectSummary } from "@/types/wbs";
@@ -71,9 +73,18 @@ export function ProjectList() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [viewMode, setViewMode] = useState<ProjectViewMode>("card");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isMigrating, setIsMigrating] = useState(false);
 
-  const refreshProjects = () => {
-    setProjects(listProjectSummaries());
+  const refreshProjects = async () => {
+    try {
+      setLoadError(null);
+      setProjects(await listProjectSummaries());
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "プロジェクトの読み込みに失敗しました",
+      );
+    }
   };
 
   useEffect(() => {
@@ -81,8 +92,7 @@ export function ProjectList() {
   }, []);
 
   useEffect(() => {
-    refreshProjects();
-    setIsReady(true);
+    void refreshProjects().finally(() => setIsReady(true));
   }, []);
 
   const filteredProjects = useMemo(() => {
@@ -96,27 +106,40 @@ export function ProjectList() {
     );
   }, [projects, query]);
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     const trimmed = projectName.trim();
     if (!trimmed) {
       return;
     }
 
     const project = createProject(trimmed);
-    saveProject(project);
+    await saveProject(project);
     setProjectName("");
     setIsCreateOpen(false);
     router.push(`/projects/${project.id}`);
   };
 
-  const handleDeleteProject = (project: WbsProjectSummary) => {
+  const handleDeleteProject = async (project: WbsProjectSummary) => {
     const confirmed = window.confirm(`「${project.name}」を削除しますか？`);
     if (!confirmed) {
       return;
     }
 
-    deleteStoredProject(project.id);
-    refreshProjects();
+    await deleteStoredProject(project.id);
+    await refreshProjects();
+  };
+
+  const handleMigrateLocal = async () => {
+    setIsMigrating(true);
+    try {
+      const count = await migrateLocalProjectsToSupabase();
+      window.alert(`${count} 件のプロジェクトを Supabase に移行しました。`);
+      await refreshProjects();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "移行に失敗しました");
+    } finally {
+      setIsMigrating(false);
+    }
   };
 
   const handleViewModeChange = (nextViewMode: ProjectViewMode) => {
@@ -153,6 +176,26 @@ export function ProjectList() {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div className="mb-4 rounded-lg border border-red-900/50 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          {loadError}
+        </div>
+      )}
+
+      {usesSupabaseStorage() && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3 text-xs text-zinc-400">
+          <span>以前ブラウザに保存したプロジェクトがある場合、Supabase へ移行できます。</span>
+          <button
+            type="button"
+            onClick={() => void handleMigrateLocal()}
+            disabled={isMigrating}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-zinc-200 transition hover:bg-zinc-900 disabled:opacity-50"
+          >
+            {isMigrating ? "移行中..." : "localStorage から移行"}
+          </button>
+        </div>
+      )}
 
       {isCreateOpen && (
         <section className="mb-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">

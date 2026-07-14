@@ -40,8 +40,8 @@ export function AccountCreate() {
         <AccountForm
           initialValues={emptyValues}
           submitLabel="登録"
-          onSubmit={(values) => {
-            createAccount(values);
+          onSubmit={async (values) => {
+            await createAccount(values);
             router.push("/account");
           }}
           onCancel={() => router.push("/account")}

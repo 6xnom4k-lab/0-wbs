@@ -33,13 +33,12 @@ export function AccountList() {
   const [isReady, setIsReady] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
-  const refreshAccounts = () => {
-    setAccounts(listAccounts());
+  const refreshAccounts = async () => {
+    setAccounts(await listAccounts());
   };
 
   useEffect(() => {
-    refreshAccounts();
-    setIsReady(true);
+    void refreshAccounts().finally(() => setIsReady(true));
   }, []);
 
   const filteredAccounts = useMemo(
@@ -62,15 +61,15 @@ export function AccountList() {
     }
   }, [currentPage, pagination.totalPages]);
 
-  const handleDelete = (account: Account) => {
+  const handleDelete = async (account: Account) => {
     const label = getAccountLabel(account.displayName, account.email);
     const confirmed = window.confirm(`「${label}」を削除しますか？`);
     if (!confirmed) {
       return;
     }
 
-    deleteAccount(account.id);
-    refreshAccounts();
+    await deleteAccount(account.id);
+    await refreshAccounts();
   };
 
   const handleExportCsv = () => {
@@ -103,8 +102,8 @@ export function AccountList() {
       return;
     }
 
-    const result = importAccounts(parsed.rows);
-    refreshAccounts();
+    const result = await importAccounts(parsed.rows);
+    await refreshAccounts();
 
     const messages = [`${result.imported} 件を登録しました。`];
     if (parsed.errors.length > 0) {

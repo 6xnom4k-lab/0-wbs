@@ -21,24 +21,36 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const storedProject = getProject(projectId);
-    if (!storedProject) {
-      router.replace("/");
-      return;
-    }
+    let cancelled = false;
 
-    const normalizedRoot = normalizeProjectRoot(storedProject.root, storedProject.name);
-    const normalizedProject =
-      normalizedRoot === storedProject.root
-        ? storedProject
-        : { ...storedProject, root: normalizedRoot };
+    void (async () => {
+      const storedProject = await getProject(projectId);
+      if (cancelled) {
+        return;
+      }
 
-    if (normalizedProject !== storedProject) {
-      saveProject(normalizedProject);
-    }
+      if (!storedProject) {
+        router.replace("/");
+        return;
+      }
 
-    setProject(normalizedProject);
-    setIsReady(true);
+      const normalizedRoot = normalizeProjectRoot(storedProject.root, storedProject.name);
+      const normalizedProject =
+        normalizedRoot === storedProject.root
+          ? storedProject
+          : { ...storedProject, root: normalizedRoot };
+
+      if (normalizedProject !== storedProject) {
+        await saveProject(normalizedProject);
+      }
+
+      setProject(normalizedProject);
+      setIsReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, router]);
 
   const nodeCount = useMemo(() => {
@@ -52,7 +64,7 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
   const handleProjectChange = useCallback((nextProject: WbsProject) => {
     const savedProject = touchProject(nextProject);
     setProject(savedProject);
-    saveProject(savedProject);
+    void saveProject(savedProject);
   }, []);
 
   const handleRootChange = useCallback(

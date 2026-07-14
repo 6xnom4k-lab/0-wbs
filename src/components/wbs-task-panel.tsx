@@ -446,7 +446,7 @@ export function WbsTaskPanel({
   }, []);
 
   const persistDraft = useCallback(
-    (nextDraft: TaskDraft, options?: { syncDraft?: boolean }) => {
+    async (nextDraft: TaskDraft, options?: { syncDraft?: boolean }) => {
       const currentNode = findNode(projectRef.current.root, nodeId);
       if (!currentNode) {
         return;
@@ -466,8 +466,13 @@ export function WbsTaskPanel({
       });
 
       onProjectChange(nextProject);
-      saveProject(nextProject);
-      setSaveState("saved");
+
+      try {
+        await saveProject(nextProject);
+        setSaveState("saved");
+      } catch {
+        setSaveState("idle");
+      }
 
       if (options?.syncDraft) {
         const inProgressLinks = nextDraft.links.filter(
@@ -488,7 +493,7 @@ export function WbsTaskPanel({
       saveTimerRef.current = null;
     }
 
-    persistDraft(draftRef.current, { syncDraft: true });
+    void persistDraft(draftRef.current, { syncDraft: true });
   }, [persistDraft]);
 
   useEffect(() => {
@@ -511,7 +516,7 @@ export function WbsTaskPanel({
             })),
           });
           onProjectChange(previousProject);
-          saveProject(previousProject);
+          void saveProject(previousProject);
         }
       }
     }
@@ -542,7 +547,7 @@ export function WbsTaskPanel({
 
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
-      persistDraft(draftRef.current, { syncDraft: true });
+      void persistDraft(draftRef.current, { syncDraft: true });
     }, 400);
 
     return () => {

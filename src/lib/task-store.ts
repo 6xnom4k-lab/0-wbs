@@ -1,10 +1,25 @@
 import type { ProjectTask, TaskInput } from "@/types/task";
 
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createId } from "@/lib/wbs";
 
 const TASKS_STORAGE_KEY = "0-wbs:tasks";
 
-function readTasks(): ProjectTask[] {
+type TaskRow = {
+  id: string;
+  project_id: string;
+  category: string;
+  title: string;
+  detail: string;
+  priority: ProjectTask["priority"];
+  start_date: string;
+  end_date: string;
+  created_at: string;
+  updated_at: string;
+};
+
+function readLocalTasks(): ProjectTask[] {
   if (typeof window === "undefined") {
     return [];
   }
@@ -21,32 +36,111 @@ function readTasks(): ProjectTask[] {
   }
 }
 
-function writeTasks(tasks: ProjectTask[]): void {
+function writeLocalTasks(tasks: ProjectTask[]): void {
   window.localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
 }
 
-export function listProjectTasks(projectId: string): ProjectTask[] {
-  return readTasks()
-    .filter((task) => task.projectId === projectId)
-    .sort((left, right) => {
-      const categoryCompare = left.category.localeCompare(right.category, "ja");
-      if (categoryCompare !== 0) {
-        return categoryCompare;
-      }
-
-      return left.title.localeCompare(right.title, "ja");
-    });
+function rowToTask(row: TaskRow): ProjectTask {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    category: row.category,
+    title: row.title,
+    detail: row.detail,
+    priority: row.priority,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
-export function getProjectTask(projectId: string, taskId: string): ProjectTask | null {
-  return (
-    readTasks().find(
-      (task) => task.projectId === projectId && task.id === taskId,
-    ) ?? null
-  );
+function taskToRow(task: ProjectTask): TaskRow {
+  return {
+    id: task.id,
+    project_id: task.projectId,
+    category: task.category,
+    title: task.title,
+    detail: task.detail,
+    priority: task.priority,
+    start_date: task.startDate,
+    end_date: task.endDate,
+    created_at: task.createdAt,
+    updated_at: task.updatedAt,
+  };
 }
 
-export function createProjectTask(projectId: string, input: TaskInput): ProjectTask {
+async function listTasksFromSupabase(projectId: string): Promise<ProjectTask[]> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("wbs_project_tasks")
+    .select("*")
+    .eq("project_id", projectId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as TaskRow[]).map(rowToTask);
+}
+
+async function getTaskFromSupabase(
+  projectId: string,
+  taskId: string,
+): Promise<ProjectTask | null> {
+  const supabase = createSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from("wbs_project_tasks")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("id", taskId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ? rowToTask(data as TaskRow) : null;
+}
+
+function sortTasks(tasks: ProjectTask[]): ProjectTask[] {
+  return [...tasks].sort((left, right) => {
+    const categoryCompare = left.category.localeCompare(right.category, "ja");
+    if (categoryCompare !== 0) {
+      return categoryCompare;
+    }
+
+    return left.title.localeCompare(right.title, "ja");
+  });
+}
+
+export async function listProjectTasks(projectId: string): Promise<ProjectTask[]> {
+  if (!isSupabaseConfigured()) {
+    return sortTasks(readLocalTasks().filter((task) => task.projectId === projectId));
+  }
+
+  return sortTasks(await listTasksFromSupabase(projectId));
+}
+
+export async function getProjectTask(
+  projectId: string,
+  taskId: string,
+): Promise<ProjectTask | null> {
+  if (!isSupabaseConfigured()) {
+    return (
+      readLocalTasks().find(
+        (task) => task.projectId === projectId && task.id === taskId,
+      ) ?? null
+    );
+  }
+
+  return getTaskFromSupabase(projectId, taskId);
+}
+
+export async function createProjectTask(
+  projectId: string,
+  input: TaskInput,
+): Promise<ProjectTask> {
   const now = new Date().toISOString();
   const task: ProjectTask = {
     id: createId(),
@@ -61,26 +155,60 @@ export function createProjectTask(projectId: string, input: TaskInput): ProjectT
     updatedAt: now,
   };
 
-  writeTasks([task, ...readTasks()]);
+  if (!isSupabaseConfigured()) {
+    writeLocalTasks([task, ...readLocalTasks()]);
+    return task;
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from("wbs_project_tasks").insert(taskToRow(task));
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
   return task;
 }
 
-export function updateProjectTask(
+export async function updateProjectTask(
   projectId: string,
   taskId: string,
   input: TaskInput,
-): ProjectTask | null {
-  const tasks = readTasks();
-  const index = tasks.findIndex(
-    (task) => task.projectId === projectId && task.id === taskId,
-  );
+): Promise<ProjectTask | null> {
+  if (!isSupabaseConfigured()) {
+    const tasks = readLocalTasks();
+    const index = tasks.findIndex(
+      (task) => task.projectId === projectId && task.id === taskId,
+    );
 
-  if (index === -1) {
+    if (index === -1) {
+      return null;
+    }
+
+    const updated: ProjectTask = {
+      ...tasks[index],
+      category: input.category.trim(),
+      title: input.title.trim(),
+      detail: input.detail.trim(),
+      priority: input.priority,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const nextTasks = [...tasks];
+    nextTasks[index] = updated;
+    writeLocalTasks(nextTasks);
+    return updated;
+  }
+
+  const existing = await getTaskFromSupabase(projectId, taskId);
+  if (!existing) {
     return null;
   }
 
   const updated: ProjectTask = {
-    ...tasks[index],
+    ...existing,
     category: input.category.trim(),
     title: input.title.trim(),
     detail: input.detail.trim(),
@@ -90,24 +218,42 @@ export function updateProjectTask(
     updatedAt: new Date().toISOString(),
   };
 
-  const nextTasks = [...tasks];
-  nextTasks[index] = updated;
-  writeTasks(nextTasks);
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase.from("wbs_project_tasks").upsert(taskToRow(updated));
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
   return updated;
 }
 
-export function deleteProjectTask(projectId: string, taskId: string): void {
-  writeTasks(
-    readTasks().filter(
-      (task) => !(task.projectId === projectId && task.id === taskId),
-    ),
-  );
+export async function deleteProjectTask(projectId: string, taskId: string): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    writeLocalTasks(
+      readLocalTasks().filter(
+        (task) => !(task.projectId === projectId && task.id === taskId),
+      ),
+    );
+    return;
+  }
+
+  const supabase = createSupabaseBrowserClient();
+  const { error } = await supabase
+    .from("wbs_project_tasks")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("id", taskId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
-export function listProjectTaskCategories(projectId: string): string[] {
+export async function listProjectTaskCategories(projectId: string): Promise<string[]> {
   const categories = new Set<string>();
 
-  for (const task of listProjectTasks(projectId)) {
+  for (const task of await listProjectTasks(projectId)) {
     if (task.category) {
       categories.add(task.category);
     }
