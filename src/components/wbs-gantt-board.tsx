@@ -22,6 +22,7 @@ import {
   GANTT_ROW_HEIGHT,
   getGanttBarRender,
 } from "@/lib/gantt-utils";
+import { useResizableSplit } from "@/hooks/use-resizable-split";
 import {
   formatEffort,
   formatTableDate,
@@ -83,6 +84,8 @@ type WbsGanttRowProps = {
 const INDENT_STEP = 18;
 const BASE_PADDING = 12;
 const WBS_TABLE_MIN_WIDTH = 760;
+const WBS_GANTT_SPLIT_STORAGE_KEY = "0-wbs-wbs-gantt-split-ratio";
+const WBS_GANTT_DEFAULT_SPLIT_RATIO = 0.6;
 const WBS_GRID_COLS =
   "28px minmax(168px,1.4fr) minmax(108px,1fr) 64px 76px 76px 72px 40px minmax(80px,0.9fr) 68px";
 
@@ -619,6 +622,12 @@ export function WbsGanttBoard({ root, onChange, onOpenTask }: WbsGanttBoardProps
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const rows = useMemo(() => flattenWbsBoard(root, collapsedIds), [root, collapsedIds]);
   const timeline = useMemo(() => buildGanttTimeline(root), [root]);
+  const { containerRef, splitRatio, isResizing, startPanelStyle, startResize } = useResizableSplit({
+    storageKey: WBS_GANTT_SPLIT_STORAGE_KEY,
+    defaultRatio: WBS_GANTT_DEFAULT_SPLIT_RATIO,
+    minStartPx: WBS_TABLE_MIN_WIDTH,
+    minEndPx: 160,
+  });
 
   const canDropInsideById = useMemo(() => {
     if (!dragSourceId) {
@@ -748,8 +757,14 @@ export function WbsGanttBoard({ root, onChange, onOpenTask }: WbsGanttBoardProps
         </div>
       </div>
 
-      <div className="flex min-w-0">
-        <div className="flex min-w-0 flex-[3] flex-col overflow-x-auto border-r border-zinc-800 bg-zinc-950">
+      <div
+        ref={containerRef}
+        className={`flex min-w-0 ${isResizing ? "select-none" : ""}`}
+      >
+        <div
+          style={startPanelStyle}
+          className="flex min-w-0 flex-col overflow-x-auto bg-zinc-950"
+        >
           <WbsTableHeader />
 
           {rows.length === 0 && !pendingAdd && (
@@ -798,7 +813,22 @@ export function WbsGanttBoard({ root, onChange, onOpenTask }: WbsGanttBoardProps
           ))}
         </div>
 
-        <div className="min-w-0 flex-[2] overflow-x-auto overscroll-x-contain bg-zinc-950/80">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="WBSとガントの幅を調整"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(splitRatio * 100)}
+          onPointerDown={startResize}
+          className={`relative z-10 w-1 shrink-0 touch-none ${
+            isResizing ? "bg-sky-500/60" : "bg-zinc-800 hover:bg-sky-500/40"
+          } cursor-col-resize transition-colors`}
+        >
+          <div className="absolute inset-y-0 -left-1.5 -right-1.5" aria-hidden="true" />
+        </div>
+
+        <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain bg-zinc-950/80">
           <div className="relative" style={{ width: timeline.chartWidthPx }}>
             <GanttCalendarHeader timeline={timeline} />
 

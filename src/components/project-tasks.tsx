@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
+import { GoogleCalendarButton } from "@/components/google-calendar-button";
 import { DeleteIcon, EditIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { TaskForm } from "@/components/task-form";
 import { getProject } from "@/lib/project-store";
@@ -17,6 +18,7 @@ import {
 import {
   emptyTaskInput,
   formatTaskPeriod,
+  formatTaskScheduledAt,
   getTaskPriorityClassName,
   getTaskPriorityLabel,
   matchesTaskQuery,
@@ -219,6 +221,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
                   <th className="hidden px-4 py-3 lg:table-cell">詳細</th>
                   <th className="px-4 py-3">優先度</th>
                   <th className="px-4 py-3">対応期間</th>
+                  <th className="px-4 py-3">対応予定</th>
                   <th className="px-4 py-3 text-right">操作</th>
                 </tr>
               </thead>
@@ -247,8 +250,21 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
                     <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
                       {formatTaskPeriod(task.startDate, task.endDate)}
                     </td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
+                      {formatTaskScheduledAt(task)}
+                    </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1">
+                        {task.scheduledAt && (
+                          <GoogleCalendarButton
+                            title={task.title}
+                            startAt={task.scheduledAt}
+                            endAt={task.scheduledEndAt || undefined}
+                            description={task.detail}
+                            label="カレンダー"
+                            className="px-2 py-1 text-xs"
+                          />
+                        )}
                         <IconButton
                           label={`${task.title} を編集`}
                           tone="primary"

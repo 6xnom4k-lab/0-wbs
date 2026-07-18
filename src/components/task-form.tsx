@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
+
 import type { TaskInput } from "@/types/task";
 
+import { GoogleCalendarButton } from "@/components/google-calendar-button";
 import { TASK_PRIORITY_OPTIONS } from "@/lib/task-utils";
 
 type TaskFormProps = {
@@ -22,6 +25,11 @@ export function TaskForm({
   onSubmit,
   onCancel,
 }: TaskFormProps) {
+  const [title, setTitle] = useState(initialValues.title);
+  const [detail, setDetail] = useState(initialValues.detail);
+  const [scheduledAt, setScheduledAt] = useState(initialValues.scheduledAt);
+  const [scheduledEndAt, setScheduledEndAt] = useState(initialValues.scheduledEndAt);
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -33,6 +41,9 @@ export function TaskForm({
       priority: String(formData.get("priority") ?? "medium") as TaskInput["priority"],
       startDate: String(formData.get("startDate") ?? ""),
       endDate: String(formData.get("endDate") ?? ""),
+      scheduledAt: String(formData.get("scheduledAt") ?? ""),
+      scheduledEndAt: String(formData.get("scheduledEndAt") ?? ""),
+      googleCalendarEventUrl: initialValues.googleCalendarEventUrl,
     });
   };
 
@@ -62,7 +73,8 @@ export function TaskForm({
           name="title"
           autoFocus
           required
-          defaultValue={initialValues.title}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
           placeholder="例: ヒアリング実施"
           className={inputClassName}
         />
@@ -73,7 +85,8 @@ export function TaskForm({
         <textarea
           name="detail"
           rows={3}
-          defaultValue={initialValues.detail}
+          value={detail}
+          onChange={(event) => setDetail(event.target.value)}
           placeholder="タスクの詳細や補足を入力"
           className={`${inputClassName} resize-y`}
         />
@@ -112,6 +125,39 @@ export function TaskForm({
           className={inputClassName}
         />
       </label>
+
+      <label className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-zinc-300">対応予定日時</span>
+        <input
+          name="scheduledAt"
+          type="datetime-local"
+          value={scheduledAt}
+          onChange={(event) => setScheduledAt(event.target.value)}
+          className={inputClassName}
+        />
+      </label>
+
+      <label className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-zinc-300">対応予定終了日時</span>
+        <input
+          name="scheduledEndAt"
+          type="datetime-local"
+          value={scheduledEndAt}
+          onChange={(event) => setScheduledEndAt(event.target.value)}
+          className={inputClassName}
+        />
+      </label>
+
+      {scheduledAt && (
+        <div className="md:col-span-2">
+          <GoogleCalendarButton
+            title={title || "WBS タスク"}
+            startAt={scheduledAt}
+            endAt={scheduledEndAt || undefined}
+            description={detail}
+          />
+        </div>
+      )}
 
       <div className="flex flex-col-reverse gap-3 md:col-span-2 md:flex-row md:justify-end">
         {onCancel && (

@@ -20,6 +20,9 @@ create table if not exists public.wbs_project_tasks (
   priority text not null default 'medium' check (priority in ('high', 'medium', 'low')),
   start_date text not null default '',
   end_date text not null default '',
+  scheduled_at text not null default '',
+  scheduled_end_at text not null default '',
+  google_calendar_event_url text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -18,6 +18,8 @@ export type WbsFlatRow = {
   assignee?: string;
   startDate?: string;
   endDate?: string;
+  scheduledAt?: string;
+  scheduledEndAt?: string;
   status?: WbsTaskStatus;
   effort?: number;
   notes?: string;
@@ -48,6 +50,8 @@ export function flattenWbsTree(
       assignee: node.assignee,
       startDate: node.startDate,
       endDate: node.endDate,
+      scheduledAt: node.scheduledAt,
+      scheduledEndAt: node.scheduledEndAt,
       status: node.status,
       effort: node.effort,
       notes: node.notes,

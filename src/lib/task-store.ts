@@ -15,6 +15,9 @@ type TaskRow = {
   priority: ProjectTask["priority"];
   start_date: string;
   end_date: string;
+  scheduled_at: string;
+  scheduled_end_at: string;
+  google_calendar_event_url: string;
   created_at: string;
   updated_at: string;
 };
@@ -50,6 +53,9 @@ function rowToTask(row: TaskRow): ProjectTask {
     priority: row.priority,
     startDate: row.start_date,
     endDate: row.end_date,
+    scheduledAt: row.scheduled_at ?? "",
+    scheduledEndAt: row.scheduled_end_at ?? "",
+    googleCalendarEventUrl: row.google_calendar_event_url ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -65,6 +71,9 @@ function taskToRow(task: ProjectTask): TaskRow {
     priority: task.priority,
     start_date: task.startDate,
     end_date: task.endDate,
+    scheduled_at: task.scheduledAt,
+    scheduled_end_at: task.scheduledEndAt,
+    google_calendar_event_url: task.googleCalendarEventUrl,
     created_at: task.createdAt,
     updated_at: task.updatedAt,
   };
@@ -151,6 +160,9 @@ export async function createProjectTask(
     priority: input.priority,
     startDate: input.startDate,
     endDate: input.endDate,
+    scheduledAt: input.scheduledAt,
+    scheduledEndAt: input.scheduledEndAt,
+    googleCalendarEventUrl: input.googleCalendarEventUrl,
     createdAt: now,
     updatedAt: now,
   };
@@ -193,6 +205,9 @@ export async function updateProjectTask(
       priority: input.priority,
       startDate: input.startDate,
       endDate: input.endDate,
+      scheduledAt: input.scheduledAt,
+      scheduledEndAt: input.scheduledEndAt,
+      googleCalendarEventUrl: input.googleCalendarEventUrl,
       updatedAt: new Date().toISOString(),
     };
 
@@ -215,6 +230,9 @@ export async function updateProjectTask(
     priority: input.priority,
     startDate: input.startDate,
     endDate: input.endDate,
+    scheduledAt: input.scheduledAt,
+    scheduledEndAt: input.scheduledEndAt,
+    googleCalendarEventUrl: input.googleCalendarEventUrl,
     updatedAt: new Date().toISOString(),
   };
 

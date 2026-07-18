@@ -42,6 +42,15 @@ npm run dev
 
 画面上部が **「データ保存先: Supabase（共有DB）」** になれば OK です。
 
+対応予定日時を入力後、**Googleカレンダーに追加** から予定入力画面を開けます（OAuth 不要）。
+
+## ユーザーマニュアル
+
+操作手順・画面説明:
+
+- **Figma（スライド）**: [0-wbs ユーザーマニュアル](https://www.figma.com/slides/Yz8I8KkDo7mhuVqz9tOPDx)
+- **Markdown**: [docs/MANUAL.md](docs/MANUAL.md)
+
 ## リポジトリ
 
 https://github.com/6xnom4k-lab/0-wbs

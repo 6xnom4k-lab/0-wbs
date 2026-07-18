@@ -75,6 +75,7 @@ export function ProjectList() {
   const [viewMode, setViewMode] = useState<ProjectViewMode>("card");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [enterArmed, setEnterArmed] = useState(false);
 
   const refreshProjects = async () => {
     try {
@@ -115,8 +116,32 @@ export function ProjectList() {
     const project = createProject(trimmed);
     await saveProject(project);
     setProjectName("");
+    setEnterArmed(false);
     setIsCreateOpen(false);
     router.push(`/projects/${project.id}`);
+  };
+
+  const handleProjectNameChange = (value: string) => {
+    setProjectName(value);
+    setEnterArmed(false);
+  };
+
+  const handleCreateKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (!projectName.trim()) {
+        return;
+      }
+      if (!enterArmed) {
+        setEnterArmed(true);
+        return;
+      }
+      void handleCreateProject();
+    }
+    if (event.key === "Escape") {
+      setEnterArmed(false);
+      setIsCreateOpen(false);
+    }
   };
 
   const handleDeleteProject = async (project: WbsProjectSummary) => {
@@ -168,7 +193,14 @@ export function ProjectList() {
 
           <button
             type="button"
-            onClick={() => setIsCreateOpen((open) => !open)}
+            onClick={() => {
+              setIsCreateOpen((open) => {
+                if (open) {
+                  setEnterArmed(false);
+                }
+                return !open;
+              });
+            }}
             className="inline-flex items-center gap-2 rounded-md border border-zinc-700 bg-white px-3 py-2 text-sm font-medium text-black transition hover:bg-zinc-200"
           >
             Add New
@@ -201,32 +233,30 @@ export function ProjectList() {
         <section className="mb-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
           <h2 className="text-sm font-medium text-white">新規プロジェクト</h2>
           <p className="mt-1 text-xs text-zinc-500">
-            作成後、WBS 編集画面へ移動します。
+            作成後、WBS 編集画面へ移動します。Enter は2回押すと作成されます。
           </p>
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
               autoFocus
               value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  handleCreateProject();
-                }
-                if (event.key === "Escape") {
-                  setIsCreateOpen(false);
-                }
-              }}
+              onChange={(event) => handleProjectNameChange(event.target.value)}
+              onKeyDown={handleCreateKeyDown}
               placeholder="例: 新商品開発プロジェクト"
               className="flex-1 rounded-md border border-zinc-800 bg-black px-3 py-2 text-sm text-zinc-200 outline-none focus:border-zinc-600"
             />
             <button
               type="button"
-              onClick={handleCreateProject}
+              onClick={() => void handleCreateProject()}
               className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-zinc-200"
             >
               作成して WBS を編集
             </button>
           </div>
+          {enterArmed && projectName.trim() && (
+            <p className="mt-2 text-xs text-amber-400/90">
+              もう一度 Enter で作成します
+            </p>
+          )}
         </section>
       )}
 
@@ -269,7 +299,10 @@ export function ProjectList() {
             {projects.length === 0 && (
               <button
                 type="button"
-                onClick={() => setIsCreateOpen(true)}
+                onClick={() => {
+                  setEnterArmed(false);
+                  setIsCreateOpen(true);
+                }}
                 className="mt-4 inline-flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300 transition hover:bg-zinc-900"
               >
                 <PlusIcon />

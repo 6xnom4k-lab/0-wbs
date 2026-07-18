@@ -1,5 +1,7 @@
 import type { ProjectTask, TaskInput, TaskPriority } from "@/types/task";
 
+import { formatScheduledRange, validateScheduledRange } from "@/lib/google-calendar";
+
 export const TASK_PRIORITY_OPTIONS: Array<{ value: TaskPriority; label: string }> = [
   { value: "high", label: "高" },
   { value: "medium", label: "中" },
@@ -65,7 +67,17 @@ export function validateTaskInput(input: TaskInput): string | null {
     return "対応期間の終了日は開始日以降にしてください。";
   }
 
+  const scheduledError = validateScheduledRange(input.scheduledAt, input.scheduledEndAt);
+  if (scheduledError) {
+    return scheduledError;
+  }
+
   return null;
+}
+
+export function formatTaskScheduledAt(task: Pick<ProjectTask, "scheduledAt" | "scheduledEndAt">): string {
+  const label = formatScheduledRange(task.scheduledAt, task.scheduledEndAt);
+  return label || "未設定";
 }
 
 export function emptyTaskInput(): TaskInput {
@@ -76,6 +88,9 @@ export function emptyTaskInput(): TaskInput {
     priority: "medium",
     startDate: "",
     endDate: "",
+    scheduledAt: "",
+    scheduledEndAt: "",
+    googleCalendarEventUrl: "",
   };
 }
 
@@ -87,5 +102,8 @@ export function toTaskInput(task: ProjectTask): TaskInput {
     priority: task.priority,
     startDate: task.startDate,
     endDate: task.endDate,
+    scheduledAt: task.scheduledAt,
+    scheduledEndAt: task.scheduledEndAt,
+    googleCalendarEventUrl: task.googleCalendarEventUrl,
   };
 }

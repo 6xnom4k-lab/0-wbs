@@ -16,6 +16,12 @@ export type WbsNode = {
   assignee?: string;
   startDate?: string;
   endDate?: string;
+  /** 対応予定開始日時（datetime-local 形式） */
+  scheduledAt?: string;
+  /** 対応予定終了日時（datetime-local 形式） */
+  scheduledEndAt?: string;
+  /** Google カレンダー連携後のイベント URL */
+  googleCalendarEventUrl?: string;
   status?: WbsTaskStatus;
   /** 作業工数（人日など） */
   effort?: number;

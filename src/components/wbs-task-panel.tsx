@@ -24,6 +24,8 @@ import {
   normalizeWbsStatus,
   WBS_STATUS_OPTIONS,
 } from "@/lib/wbs-task-meta";
+import { GoogleCalendarButton } from "@/components/google-calendar-button";
+import { formatScheduledRange } from "@/lib/google-calendar";
 import { saveProject } from "@/lib/project-store";
 import type { WbsNode, WbsProject, WbsTaskLink, WbsTaskStatus } from "@/types/wbs";
 
@@ -40,6 +42,9 @@ type TaskDraft = {
   assignee: string;
   startDate: string;
   endDate: string;
+  scheduledAt: string;
+  scheduledEndAt: string;
+  googleCalendarEventUrl: string;
   status: WbsTaskStatus;
   effort: string;
   notes: string;
@@ -56,6 +61,9 @@ function nodeToDraft(node: WbsNode): TaskDraft {
     assignee: node.assignee ?? "",
     startDate: node.startDate ?? "",
     endDate: node.endDate ?? "",
+    scheduledAt: node.scheduledAt ?? "",
+    scheduledEndAt: node.scheduledEndAt ?? "",
+    googleCalendarEventUrl: node.googleCalendarEventUrl ?? "",
     status: normalizeWbsStatus(node.status),
     effort: node.effort !== undefined ? String(node.effort) : "",
     notes: node.notes ?? "",
@@ -110,6 +118,9 @@ function draftToPersistedFields(draft: TaskDraft) {
     assignee: draft.assignee.trim(),
     startDate: draft.startDate || undefined,
     endDate: draft.endDate || undefined,
+    scheduledAt: draft.scheduledAt || undefined,
+    scheduledEndAt: draft.scheduledEndAt || undefined,
+    googleCalendarEventUrl: draft.googleCalendarEventUrl || undefined,
     status: draft.status,
     effort: parseEffort(draft.effort),
   };
@@ -130,6 +141,9 @@ function persistedFieldsEqual(
     left.assignee === right.assignee &&
     left.startDate === right.startDate &&
     left.endDate === right.endDate &&
+    left.scheduledAt === right.scheduledAt &&
+    left.scheduledEndAt === right.scheduledEndAt &&
+    left.googleCalendarEventUrl === right.googleCalendarEventUrl &&
     left.status === right.status &&
     left.effort === right.effort &&
     linksEqual(left.links, right.links)
@@ -415,6 +429,9 @@ export function WbsTaskPanel({
     assignee: "",
     startDate: "",
     endDate: "",
+    scheduledAt: "",
+    scheduledEndAt: "",
+    googleCalendarEventUrl: "",
     status: "not_started",
     effort: "",
     notes: "",
@@ -600,6 +617,15 @@ export function WbsTaskPanel({
   }
 
   const scheduleLabel = formatDateRange(draft.startDate, draft.endDate);
+  const scheduledLabel = formatScheduledRange(draft.scheduledAt, draft.scheduledEndAt);
+  const calendarDescription = [
+    project.name,
+    node.code,
+    draft.description.trim(),
+    draft.assignee.trim() ? `担当: ${draft.assignee.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
   const contentMinHeight = expanded ? "min-h-[50vh]" : "min-h-[160px]";
 
   return createPortal(
@@ -785,8 +811,48 @@ export function WbsTaskPanel({
                   />
                 </label>
 
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs text-zinc-500">対応予定日時</span>
+                  <input
+                    type="datetime-local"
+                    value={draft.scheduledAt}
+                    onChange={(event) => updateDraft({ scheduledAt: event.target.value })}
+                    className={fieldClassName}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs text-zinc-500">対応予定終了日時</span>
+                  <input
+                    type="datetime-local"
+                    value={draft.scheduledEndAt}
+                    onChange={(event) => updateDraft({ scheduledEndAt: event.target.value })}
+                    className={fieldClassName}
+                  />
+                </label>
+
                 {scheduleLabel && (
                   <p className="text-xs text-zinc-500 md:col-span-2">対応期間: {scheduleLabel}</p>
+                )}
+
+                {scheduledLabel && (
+                  <p className="text-xs text-zinc-500 md:col-span-2">
+                    対応予定: {scheduledLabel}
+                  </p>
+                )}
+
+                {draft.scheduledAt && (
+                  <div className="md:col-span-2">
+                    <GoogleCalendarButton
+                      title={`[${project.name}] ${node.name}`}
+                      startAt={draft.scheduledAt}
+                      endAt={draft.scheduledEndAt || undefined}
+                      description={calendarDescription}
+                    />
+                    <p className="mt-2 text-[11px] text-zinc-600">
+                      終了日時が未設定の場合、Googleカレンダーでは1時間の予定として追加されます。
+                    </p>
+                  </div>
                 )}
               </div>
             </section>

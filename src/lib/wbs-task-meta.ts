@@ -146,6 +146,8 @@ export function hasTaskMeta(node: WbsNode): boolean {
       (node.assignee ?? "").trim() ||
       node.startDate ||
       node.endDate ||
+      node.scheduledAt ||
+      node.scheduledEndAt ||
       node.effort !== undefined ||
       (node.status && node.status !== "not_started"),
   );
