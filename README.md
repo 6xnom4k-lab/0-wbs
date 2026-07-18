@@ -44,6 +44,10 @@ npm run dev
 
 対応予定日時を入力後、**Googleカレンダーに追加** から予定入力画面を開けます（OAuth 不要）。
 
+## 議事録 AI 連携
+
+Notion 議事録を貼り付けて AI が WBS への追加・更新を提案します。詳細は [docs/MEETING_NOTES_AI_SETUP.md](docs/MEETING_NOTES_AI_SETUP.md) を参照してください。
+
 ## ユーザーマニュアル
 
 操作手順・画面説明:
