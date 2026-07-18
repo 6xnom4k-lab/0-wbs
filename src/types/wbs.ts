@@ -6,6 +6,14 @@ export type WbsTaskLink = {
   url: string;
 };
 
+/** プロジェクト内で WBS に割り当て可能な担当者 */
+export type ProjectAssignee = {
+  id: string;
+  name: string;
+  /** アカウントマスターから追加した場合の ID */
+  accountId?: string;
+};
+
 export type WbsNode = {
   id: string;
   code: string;
@@ -31,12 +39,15 @@ export type WbsNode = {
   content?: string;
   /** 関連資料リンク */
   links?: WbsTaskLink[];
+  /** hidden root のみ: DB に assignees 列がない環境向けフォールバック */
+  projectAssignees?: ProjectAssignee[];
 };
 
 export type WbsProject = {
   id: string;
   name: string;
   root: WbsNode;
+  assignees: ProjectAssignee[];
   createdAt: string;
   updatedAt: string;
 };

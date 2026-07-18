@@ -770,12 +770,33 @@ export function WbsTaskPanel({
 
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs text-zinc-500">担当者</span>
-                  <input
-                    value={draft.assignee}
-                    onChange={(event) => updateDraft({ assignee: event.target.value })}
-                    placeholder="例: 田中"
-                    className={fieldClassName}
-                  />
+                  {project.assignees.length > 0 ? (
+                    <select
+                      value={draft.assignee}
+                      onChange={(event) => updateDraft({ assignee: event.target.value })}
+                      className={fieldClassName}
+                    >
+                      <option value="">未割当</option>
+                      {project.assignees.map((assignee) => (
+                        <option key={assignee.id} value={assignee.name}>
+                          {assignee.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>
+                      <input
+                        value={draft.assignee}
+                        onChange={(event) => updateDraft({ assignee: event.target.value })}
+                        placeholder="担当者管理で候補を追加してください"
+                        className={fieldClassName}
+                        disabled
+                      />
+                      <p className="text-[11px] text-zinc-600">
+                        担当者管理で候補を追加すると、ここから選択できます。
+                      </p>
+                    </>
+                  )}
                 </label>
 
                 <label className="flex flex-col gap-1.5">

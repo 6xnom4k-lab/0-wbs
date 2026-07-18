@@ -100,6 +100,7 @@ export function createProject(name: string): WbsProject {
     id: createId(),
     name,
     root: createHiddenRoot(name),
+    assignees: [],
     createdAt: now,
     updatedAt: now,
   };

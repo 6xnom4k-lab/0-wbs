@@ -7,6 +7,7 @@ create table if not exists public.wbs_projects (
   id text primary key,
   name text not null,
   root jsonb not null,
+  assignees jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -17,6 +18,8 @@ create table if not exists public.wbs_project_tasks (
   category text not null default '',
   title text not null,
   detail text not null default '',
+  notes text not null default '',
+  content text not null default '',
   assignee text not null default '',
   wbs_node_id text not null default '',
   status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'done', 'on_hold')),

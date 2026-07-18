@@ -5,6 +5,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent } from "
 import { GanttCalendarHeader, GanttCalendarRow } from "@/components/gantt-calendar";
 import { IconButton } from "@/components/icon-button";
 import { WbsStatusQuickSelect } from "@/components/wbs-status-badge";
+import { WbsAssigneeQuickSelect } from "@/components/wbs-assignee-quick-select";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -44,6 +45,7 @@ import type { WbsNode, WbsTaskStatus } from "@/types/wbs";
 
 type WbsGanttBoardProps = {
   root: WbsNode;
+  assigneeOptions: string[];
   onChange: (root: WbsNode) => void;
   onOpenTask: (nodeId: string) => void;
 };
@@ -66,6 +68,7 @@ type WbsGanttRowProps = {
   row: WbsFlatRow;
   rowIndex: number;
   root: WbsNode;
+  assigneeOptions: string[];
   onChange: (root: WbsNode) => void;
   pendingAdd: PendingAdd | null;
   onStartAdd: (mode: AddMode, targetId: string) => void;
@@ -441,6 +444,7 @@ function WbsRowLeft({
   row,
   rowIndex,
   root,
+  assigneeOptions,
   onChange,
   pendingAdd,
   onStartAdd,
@@ -528,6 +532,15 @@ function WbsRowLeft({
     );
   };
 
+  const handleAssigneeChange = (assignee: string) => {
+    onChange(
+      updateNode(root, row.id, (current) => ({
+        ...current,
+        assignee,
+      })),
+    );
+  };
+
   return (
     <Fragment>
       <div
@@ -583,7 +596,14 @@ function WbsRowLeft({
         </div>
 
         <WbsMetaCell value={row.description} />
-        <WbsMetaCell value={row.assignee} />
+        <div className="px-1">
+          <WbsAssigneeQuickSelect
+            value={row.assignee}
+            options={assigneeOptions}
+            compact
+            onChange={handleAssigneeChange}
+          />
+        </div>
         <WbsMetaCell value={formatTableDate(row.startDate)} className="tabular-nums" />
         <WbsMetaCell value={formatTableDate(row.endDate)} className="tabular-nums" />
         <div className="px-1">
@@ -628,7 +648,7 @@ function WbsRowLeft({
   );
 }
 
-export function WbsGanttBoard({ root, onChange, onOpenTask }: WbsGanttBoardProps) {
+export function WbsGanttBoard({ root, assigneeOptions, onChange, onOpenTask }: WbsGanttBoardProps) {
   const [pendingAdd, setPendingAdd] = useState<PendingAdd | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [dragSourceId, setDragSourceId] = useState<string | null>(null);
@@ -809,6 +829,7 @@ export function WbsGanttBoard({ root, onChange, onOpenTask }: WbsGanttBoardProps
               row={row}
               rowIndex={index}
               root={root}
+              assigneeOptions={assigneeOptions}
               onChange={onChange}
               pendingAdd={pendingAdd}
               onStartAdd={(mode, targetId) => setPendingAdd({ mode, targetId })}

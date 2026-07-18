@@ -45,6 +45,8 @@ export function TaskForm({
       category: String(formData.get("category") ?? ""),
       title: String(formData.get("title") ?? ""),
       detail: String(formData.get("detail") ?? ""),
+      notes: initialValues.notes,
+      content: initialValues.content,
       assignee: String(formData.get("assignee") ?? ""),
       wbsNodeId: String(formData.get("wbsNodeId") ?? ""),
       status: String(formData.get("status") ?? "not_started") as TaskInput["status"],

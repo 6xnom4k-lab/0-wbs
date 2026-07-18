@@ -13,6 +13,8 @@ type TaskRow = {
   category: string;
   title: string;
   detail: string;
+  notes: string;
+  content: string;
   assignee: string;
   wbs_node_id: string;
   status: ProjectTask["status"];
@@ -52,6 +54,8 @@ function normalizeTask(task: ProjectTask): ProjectTask {
     ...task,
     assignee: task.assignee ?? "",
     wbsNodeId: task.wbsNodeId ?? "",
+    notes: task.notes ?? "",
+    content: task.content ?? "",
     status: normalizeWbsStatus(task.status),
     scheduledAt: task.scheduledAt ?? "",
     scheduledEndAt: task.scheduledEndAt ?? "",
@@ -66,6 +70,8 @@ function rowToTask(row: TaskRow): ProjectTask {
     category: row.category,
     title: row.title,
     detail: row.detail,
+    notes: row.notes ?? "",
+    content: row.content ?? "",
     assignee: row.assignee ?? "",
     wbsNodeId: row.wbs_node_id ?? "",
     status: row.status ?? "not_started",
@@ -87,6 +93,8 @@ function taskToRow(task: ProjectTask): TaskRow {
     category: task.category,
     title: task.title,
     detail: task.detail,
+    notes: task.notes,
+    content: task.content,
     assignee: task.assignee,
     wbs_node_id: task.wbsNodeId,
     status: task.status,
@@ -179,6 +187,8 @@ export async function createProjectTask(
     category: input.category.trim(),
     title: input.title.trim(),
     detail: input.detail.trim(),
+    notes: input.notes.trim(),
+    content: input.content,
     assignee: input.assignee.trim(),
     wbsNodeId: input.wbsNodeId.trim(),
     status: normalizeWbsStatus(input.status),
@@ -227,6 +237,11 @@ export async function updateProjectTask(
       category: input.category.trim(),
       title: input.title.trim(),
       detail: input.detail.trim(),
+      notes: input.notes.trim(),
+      content: input.content,
+      assignee: input.assignee.trim(),
+      wbsNodeId: input.wbsNodeId.trim(),
+      status: normalizeWbsStatus(input.status),
       priority: input.priority,
       startDate: input.startDate,
       endDate: input.endDate,
@@ -252,6 +267,8 @@ export async function updateProjectTask(
     category: input.category.trim(),
     title: input.title.trim(),
     detail: input.detail.trim(),
+    notes: input.notes.trim(),
+    content: input.content,
     assignee: input.assignee.trim(),
     wbsNodeId: input.wbsNodeId.trim(),
     status: normalizeWbsStatus(input.status),

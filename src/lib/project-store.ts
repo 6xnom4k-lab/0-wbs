@@ -1,4 +1,5 @@
 import { countNodes } from "@/lib/wbs";
+import { normalizeProjectAssignees } from "@/lib/project-assignees";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { WbsNode, WbsProject, WbsProjectSummary } from "@/types/wbs";
@@ -9,6 +10,7 @@ type ProjectRow = {
   id: string;
   name: string;
   root: WbsNode;
+  assignees?: WbsProject["assignees"];
   created_at: string;
   updated_at: string;
 };
@@ -24,7 +26,7 @@ function readLocalProjects(): WbsProject[] {
   }
 
   try {
-    return JSON.parse(raw) as WbsProject[];
+    return (JSON.parse(raw) as WbsProject[]).map(normalizeProjectAssignees);
   } catch {
     return [];
   }
@@ -34,24 +36,48 @@ function writeLocalProjects(projects: WbsProject[]): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
 }
 
+function extractAssignees(row: Pick<ProjectRow, "assignees" | "root">): WbsProject["assignees"] {
+  if (Array.isArray(row.assignees) && row.assignees.length > 0) {
+    return row.assignees;
+  }
+
+  if (row.root.code === "0" && Array.isArray(row.root.projectAssignees)) {
+    return row.root.projectAssignees;
+  }
+
+  return [];
+}
+
 function rowToProject(row: ProjectRow): WbsProject {
-  return {
+  return normalizeProjectAssignees({
     id: row.id,
     name: row.name,
     root: row.root,
+    assignees: extractAssignees(row),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  });
 }
 
 function projectToRow(project: WbsProject) {
+  const normalized = normalizeProjectAssignees(project);
+  const root =
+    normalized.root.code === "0"
+      ? { ...normalized.root, projectAssignees: normalized.assignees }
+      : normalized.root;
+
   return {
-    id: project.id,
-    name: project.name,
-    root: project.root,
-    created_at: project.createdAt,
-    updated_at: project.updatedAt,
+    id: normalized.id,
+    name: normalized.name,
+    root,
+    assignees: normalized.assignees,
+    created_at: normalized.createdAt,
+    updated_at: normalized.updatedAt,
   };
+}
+
+function isAssigneesColumnError(message: string): boolean {
+  return /assignees|column|schema cache|PGRST204/i.test(message);
 }
 
 async function listProjectsFromSupabase(): Promise<WbsProject[]> {
@@ -85,7 +111,13 @@ async function getProjectFromSupabase(id: string): Promise<WbsProject | null> {
 
 async function saveProjectToSupabase(project: WbsProject): Promise<void> {
   const supabase = createSupabaseBrowserClient();
-  const { error } = await supabase.from("wbs_projects").upsert(projectToRow(project));
+  const row = projectToRow(project);
+  let { error } = await supabase.from("wbs_projects").upsert(row);
+
+  if (error && isAssigneesColumnError(error.message)) {
+    const { assignees: _removed, ...legacyRow } = row;
+    ({ error } = await supabase.from("wbs_projects").upsert(legacyRow));
+  }
 
   if (error) {
     throw new Error(error.message);

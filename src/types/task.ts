@@ -8,6 +8,8 @@ export type ProjectTask = {
   category: string;
   title: string;
   detail: string;
+  notes: string;
+  content: string;
   assignee: string;
   wbsNodeId: string;
   status: WbsTaskStatus;
@@ -26,6 +28,8 @@ export type TaskInput = Pick<
   | "category"
   | "title"
   | "detail"
+  | "notes"
+  | "content"
   | "assignee"
   | "wbsNodeId"
   | "status"

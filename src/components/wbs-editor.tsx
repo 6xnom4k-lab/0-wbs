@@ -7,6 +7,7 @@ import { MeetingNotesImportDialog } from "@/components/meeting-notes-import-dial
 import { WbsGanttBoard } from "@/components/wbs-gantt-board";
 import { WbsTaskPanel } from "@/components/wbs-task-panel";
 import { getProject, saveProject } from "@/lib/project-store";
+import { listProjectAssigneeNames, normalizeProjectAssignees } from "@/lib/project-assignees";
 import { countNodes, findNode, normalizeProjectRoot, touchProject } from "@/lib/wbs";
 import type { WbsProject } from "@/types/wbs";
 
@@ -20,6 +21,7 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
   const activeTaskId = searchParams.get("task");
   const [project, setProject] = useState<WbsProject | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importFeedback, setImportFeedback] = useState<string | null>(null);
 
@@ -38,18 +40,35 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
       }
 
       const normalizedRoot = normalizeProjectRoot(storedProject.root, storedProject.name);
-      const normalizedProject =
-        normalizedRoot === storedProject.root
-          ? storedProject
-          : { ...storedProject, root: normalizedRoot };
+      const normalizedProject = normalizeProjectAssignees({
+        ...storedProject,
+        root: normalizedRoot,
+      });
 
-      if (normalizedProject !== storedProject) {
-        await saveProject(normalizedProject);
+      const needsAssigneeMigration = !Array.isArray(storedProject.assignees);
+      const needsRootMigration = normalizedRoot !== storedProject.root;
+
+      if (needsAssigneeMigration || needsRootMigration) {
+        try {
+          await saveProject(normalizedProject);
+        } catch (error) {
+          console.error("Failed to migrate project on load:", error);
+        }
       }
 
-      setProject(normalizedProject);
-      setIsReady(true);
-    })();
+      if (!cancelled) {
+        setProject(normalizedProject);
+        setIsReady(true);
+      }
+    })().catch((error) => {
+      console.error("Failed to load project:", error);
+      if (!cancelled) {
+        setLoadError(
+          error instanceof Error ? error.message : "プロジェクトの読み込みに失敗しました",
+        );
+        setIsReady(true);
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -63,6 +82,11 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
 
     return countNodes(project.root);
   }, [project]);
+
+  const assigneeOptions = useMemo(
+    () => (project ? listProjectAssigneeNames(project) : []),
+    [project],
+  );
 
   const handleProjectChange = useCallback((nextProject: WbsProject) => {
     const savedProject = touchProject(nextProject);
@@ -122,6 +146,14 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
     }
   }, [activeTaskId, closeTask, isReady, project]);
 
+  if (loadError) {
+    return (
+      <div className="px-6 py-10">
+        <p className="text-sm text-red-400">読み込みに失敗しました: {loadError}</p>
+      </div>
+    );
+  }
+
   if (!isReady || !project) {
     return (
       <div className="px-6 py-10">
@@ -174,6 +206,7 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
 
           <WbsGanttBoard
             root={project.root}
+            assigneeOptions={assigneeOptions}
             onChange={handleRootChange}
             onOpenTask={openTask}
           />

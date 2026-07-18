@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import { GoogleCalendarButton } from "@/components/google-calendar-button";
-import { DeleteIcon, EditIcon, ExternalLinkIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import { DeleteIcon, EditIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import { ProjectTaskPanel } from "@/components/project-task-panel";
 import { TaskForm } from "@/components/task-form";
+import { WbsTaskPanel } from "@/components/wbs-task-panel";
 import { WbsStatusQuickSelect } from "@/components/wbs-status-badge";
-import { listAccounts } from "@/lib/account-store";
+import { listProjectAssigneeNames } from "@/lib/project-assignees";
 import { getProject, saveProject } from "@/lib/project-store";
 import {
   createProjectTask,
@@ -34,7 +36,7 @@ import {
   toTaskInput,
   validateTaskInput,
 } from "@/lib/task-utils";
-import { touchProject, updateNode } from "@/lib/wbs";
+import { touchProject, updateNode, findNode } from "@/lib/wbs";
 import type { ProjectTask, TaskInput } from "@/types/task";
 import type { TaskViewMode, UnifiedTask } from "@/types/unified-task";
 import type { WbsProject, WbsTaskStatus } from "@/types/wbs";
@@ -67,6 +69,7 @@ type TaskTableProps = {
   projectId: string;
   onWbsStatusChange: (nodeId: string, status: WbsTaskStatus) => void;
   onManualStatusChange: (taskId: string, status: WbsTaskStatus) => void;
+  onOpenDetail: (task: UnifiedTask) => void;
   onEditManual: (taskId: string) => void;
   onDeleteManual: (task: UnifiedTask) => void;
 };
@@ -76,6 +79,7 @@ function TaskTable({
   projectId,
   onWbsStatusChange,
   onManualStatusChange,
+  onOpenDetail,
   onEditManual,
   onDeleteManual,
 }: TaskTableProps) {
@@ -126,8 +130,15 @@ function TaskTable({
               <td className="max-w-[10rem] truncate px-4 py-2.5 text-zinc-400">
                 {task.category || "—"}
               </td>
-              <td className="max-w-[12rem] truncate px-4 py-2.5 font-medium text-zinc-100">
-                {task.title}
+              <td className="max-w-[12rem] px-4 py-2.5 font-medium text-zinc-100">
+                <button
+                  type="button"
+                  onClick={() => onOpenDetail(task)}
+                  className="block max-w-full truncate text-left transition hover:text-white hover:underline"
+                  title={task.title}
+                >
+                  {task.title}
+                </button>
               </td>
               <td
                 className="hidden max-w-[18rem] truncate px-4 py-2.5 text-zinc-500 lg:table-cell"
@@ -169,6 +180,13 @@ function TaskTable({
               </td>
               <td className="px-4 py-2.5">
                 <div className="flex items-center justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpenDetail(task)}
+                    className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 transition hover:bg-zinc-900"
+                  >
+                    詳細
+                  </button>
                   {task.source === "manual" && task.scheduledAt && (
                     <GoogleCalendarButton
                       title={task.title}
@@ -179,15 +197,7 @@ function TaskTable({
                       className="px-2 py-1 text-xs"
                     />
                   )}
-                  {task.source === "wbs" && task.wbsNodeId ? (
-                    <Link
-                      href={`/projects/${projectId}/wbs?task=${task.wbsNodeId}`}
-                      className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 transition hover:bg-zinc-900"
-                    >
-                      <ExternalLinkIcon className="h-3.5 w-3.5" />
-                      WBS
-                    </Link>
-                  ) : (
+                  {task.source === "manual" && task.manualTaskId && (
                     <>
                       <IconButton
                         label={`${task.title} を編集`}
@@ -217,6 +227,9 @@ function TaskTable({
 
 export function ProjectTasks({ projectId }: ProjectTasksProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeWbsId = searchParams.get("wbs");
+  const activeTaskId = searchParams.get("task");
   const [project, setProject] = useState<WbsProject | null>(null);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [assigneeSuggestions, setAssigneeSuggestions] = useState<string[]>([]);
@@ -230,11 +243,10 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
   const [categories, setCategories] = useState<string[]>([]);
 
   const refreshData = async () => {
-    const [loadedProject, nextTasks, nextCategories, accounts] = await Promise.all([
+    const [loadedProject, nextTasks, nextCategories] = await Promise.all([
       getProject(projectId),
       listProjectTasks(projectId),
       listProjectTaskCategories(projectId),
-      listAccounts(),
     ]);
 
     if (!loadedProject) {
@@ -245,7 +257,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
     setProject(loadedProject);
     setTasks(nextTasks);
     setCategories(nextCategories);
-    setAssigneeSuggestions(accounts.map((account) => account.displayName).filter(Boolean));
+    setAssigneeSuggestions(listProjectAssigneeNames(loadedProject));
     return true;
   };
 
@@ -378,6 +390,53 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
     [project],
   );
 
+  const activeManualTask = useMemo(
+    () => tasks.find((item) => item.id === activeTaskId) ?? null,
+    [activeTaskId, tasks],
+  );
+
+  const openDetail = useCallback(
+    (task: UnifiedTask) => {
+      if (task.source === "wbs" && task.wbsNodeId) {
+        router.push(`/projects/${projectId}/tasks?wbs=${task.wbsNodeId}`, { scroll: false });
+        return;
+      }
+
+      if (task.manualTaskId) {
+        router.push(`/projects/${projectId}/tasks?task=${task.manualTaskId}`, { scroll: false });
+      }
+    },
+    [projectId, router],
+  );
+
+  const closeDetail = useCallback(() => {
+    router.push(`/projects/${projectId}/tasks`, { scroll: false });
+  }, [projectId, router]);
+
+  const handleProjectChange = useCallback(async (nextProject: WbsProject) => {
+    const saved = touchProject(nextProject);
+    await saveProject(saved);
+    setProject(saved);
+  }, []);
+
+  const handleManualTaskChange = useCallback((updated: ProjectTask) => {
+    setTasks((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+  }, []);
+
+  useEffect(() => {
+    if (!isReady || !project) {
+      return;
+    }
+
+    if (activeWbsId && !findNode(project.root, activeWbsId)) {
+      closeDetail();
+    }
+
+    if (activeTaskId && !tasks.some((item) => item.id === activeTaskId)) {
+      closeDetail();
+    }
+  }, [activeTaskId, activeWbsId, closeDetail, isReady, project, tasks]);
+
   if (!project) {
     return (
       <div className="px-6 py-10">
@@ -387,14 +446,14 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
   }
 
   return (
+    <>
     <div className="px-6 py-8 md:px-10">
       <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm text-zinc-500">Project</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">タスク管理</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            WBS の作業項目と追加タスクをまとめて管理します。担当者別の一覧表示や WBS
-            への割り当てができます。
+            WBS の作業項目と追加タスクをまとめて管理します。項目名または「詳細」から内容を編集できます。
           </p>
         </div>
 
@@ -524,6 +583,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
               projectId={projectId}
               onWbsStatusChange={handleWbsStatusChange}
               onManualStatusChange={(taskId, status) => void handleManualStatusChange(taskId, status)}
+              onOpenDetail={openDetail}
               onEditManual={(taskId) => {
                 setFormError(null);
                 setFormMode({ type: "edit", taskId });
@@ -546,6 +606,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
                   onManualStatusChange={(taskId, status) =>
                     void handleManualStatusChange(taskId, status)
                   }
+                  onOpenDetail={openDetail}
                   onEditManual={(taskId) => {
                     setFormError(null);
                     setFormMode({ type: "edit", taskId });
@@ -558,5 +619,28 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
         )}
       </section>
     </div>
+
+      {activeWbsId && findNode(project.root, activeWbsId) && (
+        <WbsTaskPanel
+          nodeId={activeWbsId}
+          project={project}
+          onProjectChange={handleProjectChange}
+          onClose={closeDetail}
+          onOpenTask={(nodeId) =>
+            router.push(`/projects/${projectId}/tasks?wbs=${nodeId}`, { scroll: false })
+          }
+        />
+      )}
+
+      {activeTaskId && activeManualTask && (
+        <ProjectTaskPanel
+          taskId={activeTaskId}
+          project={project}
+          task={activeManualTask}
+          onTaskChange={handleManualTaskChange}
+          onClose={closeDetail}
+        />
+      )}
+    </>
   );
 }
