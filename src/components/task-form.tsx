@@ -6,6 +6,7 @@ import type { TaskInput } from "@/types/task";
 
 import { GoogleCalendarButton } from "@/components/google-calendar-button";
 import { TaskProgressEditor } from "@/components/task-progress-bar";
+import type { AssigneeSuggestion } from "@/lib/assignee-suggestions";
 import type { WbsNodeOption } from "@/lib/unified-tasks";
 import { TASK_PRIORITY_OPTIONS } from "@/lib/task-utils";
 import { WBS_STATUS_OPTIONS } from "@/lib/wbs-task-meta";
@@ -15,6 +16,7 @@ type TaskFormProps = {
   initialValues: TaskInput;
   categorySuggestions: string[];
   assigneeSuggestions: string[];
+  assigneeSuggestionDetails?: AssigneeSuggestion[];
   wbsNodeOptions: WbsNodeOption[];
   submitLabel: string;
   onSubmit: (values: TaskInput) => void;
@@ -28,6 +30,7 @@ export function TaskForm({
   initialValues,
   categorySuggestions,
   assigneeSuggestions,
+  assigneeSuggestionDetails = [],
   wbsNodeOptions,
   submitLabel,
   onSubmit,
@@ -35,6 +38,7 @@ export function TaskForm({
 }: TaskFormProps) {
   const [title, setTitle] = useState(initialValues.title);
   const [detail, setDetail] = useState(initialValues.detail);
+  const [assignee, setAssignee] = useState(initialValues.assignee);
   const [scheduledAt, setScheduledAt] = useState(initialValues.scheduledAt);
   const [scheduledEndAt, setScheduledEndAt] = useState(initialValues.scheduledEndAt);
   const [wbsNodeId, setWbsNodeId] = useState(initialValues.wbsNodeId);
@@ -90,18 +94,59 @@ export function TaskForm({
 
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium text-zinc-300">担当者</span>
-        <input
-          name="assignee"
-          list="task-assignee-suggestions"
-          defaultValue={initialValues.assignee}
-          placeholder="例: 山田太郎"
-          className={inputClassName}
-        />
-        <datalist id="task-assignee-suggestions">
-          {assigneeSuggestions.map((assignee) => (
-            <option key={assignee} value={assignee} />
-          ))}
-        </datalist>
+        {assigneeSuggestionDetails.some((item) => item.source === "project") ? (
+          <select
+            name="assignee"
+            value={assignee}
+            onChange={(event) => setAssignee(event.target.value)}
+            className={inputClassName}
+          >
+            <option value="">未割当</option>
+            <optgroup label="プロジェクト担当者">
+              {assigneeSuggestionDetails
+                .filter((item) => item.source === "project")
+                .map((item) => (
+                  <option key={`project-${item.name}`} value={item.name}>
+                    {item.name}
+                    {item.hint ? `（${item.hint}）` : ""}
+                  </option>
+                ))}
+            </optgroup>
+            {assigneeSuggestionDetails.some((item) => item.source === "account") && (
+              <optgroup label="アカウントマスター">
+                {assigneeSuggestionDetails
+                  .filter((item) => item.source === "account")
+                  .map((item) => (
+                    <option key={`account-${item.name}`} value={item.name}>
+                      {item.name}
+                      {item.hint ? `（${item.hint}）` : ""}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
+        ) : (
+          <>
+            <input
+              name="assignee"
+              list="task-assignee-suggestions"
+              value={assignee}
+              onChange={(event) => setAssignee(event.target.value)}
+              placeholder="例: 山田太郎"
+              className={inputClassName}
+            />
+            <datalist id="task-assignee-suggestions">
+              {assigneeSuggestions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </>
+        )}
+        {assigneeSuggestionDetails.some((item) => item.source === "account") && (
+          <span className="text-xs text-zinc-500">
+            アカウントマスターの候補も表示しています。プロジェクト担当者への追加は担当者管理から行えます。
+          </span>
+        )}
       </label>
 
       <label className="flex flex-col gap-2">

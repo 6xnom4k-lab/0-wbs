@@ -1,9 +1,11 @@
 import { normalizeWbsStatus, parseISODate } from "@/lib/wbs-task-meta";
 import type {
+  ManualTaskProposal,
   WbsProposalConfidence,
   WbsTaskProposal,
   WbsProposalAction,
 } from "@/types/meeting-notes";
+import type { TaskPriority } from "@/types/task";
 import type { WbsTaskStatus } from "@/types/wbs";
 
 type RawProposal = {
@@ -21,19 +23,44 @@ type RawProposal = {
   reasoning?: string;
 };
 
+type RawTaskProposal = {
+  title?: string;
+  category?: string | null;
+  detail?: string | null;
+  assignee?: string | null;
+  wbsNodeId?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  status?: string | null;
+  priority?: string | null;
+  notes?: string | null;
+  confidence?: string;
+  reasoning?: string;
+};
+
 type RawResponse = {
   summary?: string;
   proposals?: RawProposal[];
+  taskProposals?: RawTaskProposal[];
 };
 
 const VALID_ACTIONS = new Set<WbsProposalAction>(["create", "update"]);
 const VALID_CONFIDENCE = new Set<WbsProposalConfidence>(["high", "medium", "low"]);
+const VALID_PRIORITY = new Set<TaskPriority>(["high", "medium", "low"]);
 const VALID_STATUS = new Set<WbsTaskStatus>([
   "not_started",
   "in_progress",
   "done",
   "on_hold",
 ]);
+
+function normalizePriority(value: string | null | undefined): TaskPriority | undefined {
+  if (!value || !VALID_PRIORITY.has(value as TaskPriority)) {
+    return undefined;
+  }
+
+  return value as TaskPriority;
+}
 
 function normalizeOptionalString(value: string | null | undefined): string | undefined {
   if (value === null || value === undefined) {
@@ -64,6 +91,7 @@ function normalizeStatus(value: string | null | undefined): WbsTaskStatus | unde
 export function normalizeAnalyzeResponse(raw: unknown): {
   summary: string;
   proposals: WbsTaskProposal[];
+  taskProposals: ManualTaskProposal[];
 } {
   const data = (raw ?? {}) as RawResponse;
   const summary =
@@ -118,7 +146,45 @@ export function normalizeAnalyzeResponse(raw: unknown): {
         .filter((item): item is WbsTaskProposal => item !== null)
     : [];
 
-  return { summary, proposals };
+  const taskProposals = Array.isArray(data.taskProposals)
+    ? data.taskProposals
+        .map((item): ManualTaskProposal | null => {
+          if (!item || typeof item !== "object") {
+            return null;
+          }
+
+          const title = normalizeOptionalString(item.title);
+          if (!title) {
+            return null;
+          }
+
+          const confidence = VALID_CONFIDENCE.has(item.confidence as WbsProposalConfidence)
+            ? (item.confidence as WbsProposalConfidence)
+            : "medium";
+
+          const reasoning =
+            normalizeOptionalString(item.reasoning) ?? "議事録の内容に基づく付箋タスク提案です。";
+
+          return {
+            id: crypto.randomUUID(),
+            title,
+            category: normalizeOptionalString(item.category ?? undefined),
+            detail: normalizeOptionalString(item.detail ?? undefined),
+            assignee: normalizeOptionalString(item.assignee ?? undefined),
+            wbsNodeId: normalizeOptionalString(item.wbsNodeId ?? undefined),
+            startDate: normalizeDate(item.startDate),
+            endDate: normalizeDate(item.endDate),
+            status: normalizeStatus(item.status),
+            priority: normalizePriority(item.priority),
+            notes: normalizeOptionalString(item.notes ?? undefined),
+            confidence,
+            reasoning,
+          };
+        })
+        .filter((item): item is ManualTaskProposal => item !== null)
+    : [];
+
+  return { summary, proposals, taskProposals };
 }
 
 export function isOpenAIConfigured(): boolean {

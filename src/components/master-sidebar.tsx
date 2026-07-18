@@ -8,12 +8,12 @@ import { FolderIcon, SearchIcon, UsersIcon } from "@/components/icons";
 const menuItems = [
   {
     href: "/",
-    label: "Projects",
+    label: "プロジェクト",
     icon: FolderIcon,
   },
   {
     href: "/account",
-    label: "Accounts",
+    label: "アカウント",
     icon: UsersIcon,
   },
 ] as const;
@@ -30,7 +30,7 @@ export function MasterSidebar() {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-white">0-wbs</p>
-            <p className="truncate text-xs text-zinc-500">Master</p>
+            <p className="truncate text-xs text-zinc-500">マスター</p>
           </div>
         </div>
       </div>
@@ -40,7 +40,7 @@ export function MasterSidebar() {
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
           <input
             readOnly
-            placeholder="Find..."
+            placeholder="検索..."
             className="w-full cursor-default rounded-md border border-zinc-800 bg-zinc-950 px-9 py-2 text-xs text-zinc-400 outline-none"
           />
           <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-500">
@@ -75,7 +75,7 @@ export function MasterSidebar() {
       </nav>
 
       <div className="border-t border-zinc-800 px-4 py-3">
-        <p className="text-xs text-zinc-500">Workspace</p>
+        <p className="text-xs text-zinc-500">ワークスペース</p>
         <p className="mt-1 truncate text-sm text-zinc-300">0-wbs</p>
       </div>
     </aside>

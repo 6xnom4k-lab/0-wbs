@@ -89,6 +89,7 @@ export async function POST(request: Request): Promise<Response> {
     const response: MeetingNotesAnalyzeResponse = {
       summary: normalized.summary,
       proposals: normalized.proposals,
+      taskProposals: normalized.taskProposals,
     };
 
     return Response.json(response);

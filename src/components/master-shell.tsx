@@ -41,13 +41,13 @@ function MasterMobileNav() {
         href="/"
         className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300"
       >
-        Projects
+        プロジェクト
       </Link>
       <Link
         href="/account"
         className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300"
       >
-        Accounts
+        アカウント
       </Link>
     </>
   );

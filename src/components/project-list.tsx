@@ -14,6 +14,7 @@ import {
   TableRowsIcon,
 } from "@/components/icons";
 import { IconButton } from "@/components/icon-button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { ViewModeToggle } from "@/components/view-mode-toggle";
 import {
   deleteProject as deleteStoredProject,
@@ -23,6 +24,7 @@ import {
   usesSupabaseStorage,
 } from "@/lib/project-store";
 import { createProject } from "@/lib/wbs";
+import { formatRelativeDateJa } from "@/lib/format-relative-date";
 import type { WbsProjectSummary } from "@/types/wbs";
 
 type ProjectViewMode = "card" | "table";
@@ -38,35 +40,9 @@ function readStoredViewMode(): ProjectViewMode {
   return stored === "table" ? "table" : "card";
 }
 
-function formatRelativeDate(value: string): string {
-  const diffMs = Date.now() - new Date(value).getTime();
-  const diffMinutes = Math.floor(diffMs / 60000);
-
-  if (diffMinutes < 1) {
-    return "just now";
-  }
-  if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
-
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) {
-    return `${diffDays}d ago`;
-  }
-
-  return new Intl.DateTimeFormat("ja-JP", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
-}
-
 export function ProjectList() {
   const router = useRouter();
+  const confirm = useConfirm();
   const [projects, setProjects] = useState<WbsProjectSummary[]>([]);
   const [query, setQuery] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -145,7 +121,12 @@ export function ProjectList() {
   };
 
   const handleDeleteProject = async (project: WbsProjectSummary) => {
-    const confirmed = window.confirm(`「${project.name}」を削除しますか？`);
+    const confirmed = await confirm({
+      title: "プロジェクトの削除",
+      description: `「${project.name}」を削除します。この操作は取り消せません。`,
+      confirmLabel: "削除",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }
@@ -176,8 +157,8 @@ export function ProjectList() {
     <div className="px-6 py-8 md:px-10">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm text-zinc-500">All Projects</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">Overview</h1>
+          <p className="text-sm text-zinc-500">プロジェクト一覧</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">概要</h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -186,7 +167,7 @@ export function ProjectList() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search Projects..."
+              placeholder="プロジェクトを検索..."
               className="w-full rounded-md border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-200 outline-none transition focus:border-zinc-600"
             />
           </div>
@@ -203,7 +184,7 @@ export function ProjectList() {
             }}
             className="inline-flex items-center gap-2 rounded-md border border-zinc-700 bg-white px-3 py-2 text-sm font-medium text-black transition hover:bg-zinc-200"
           >
-            Add New
+            新規作成
             <ChevronDownIcon className="h-4 w-4" />
           </button>
         </div>
@@ -263,8 +244,8 @@ export function ProjectList() {
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-medium text-zinc-400">Projects</h2>
-            <span className="text-xs text-zinc-600">{filteredProjects.length} total</span>
+            <h2 className="text-sm font-medium text-zinc-400">プロジェクト</h2>
+            <span className="text-xs text-zinc-600">{filteredProjects.length} 件</span>
           </div>
 
           <ViewModeToggle
@@ -306,7 +287,7 @@ export function ProjectList() {
                 className="mt-4 inline-flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300 transition hover:bg-zinc-900"
               >
                 <PlusIcon />
-                Add New
+                新規作成
               </button>
             )}
           </div>
@@ -331,7 +312,7 @@ export function ProjectList() {
                           {project.name}
                         </Link>
                         <p className="truncate text-xs text-zinc-500">
-                          {project.nodeCount} WBS items
+                          {project.nodeCount} 項目
                         </p>
                       </div>
                     </div>
@@ -349,13 +330,13 @@ export function ProjectList() {
 
                 <div className="flex items-center justify-between px-4 py-3">
                   <p className="text-xs text-zinc-500">
-                    Updated {formatRelativeDate(project.updatedAt)}
+                    更新 {formatRelativeDateJa(project.updatedAt)}
                   </p>
                   <Link
                     href={`/projects/${project.id}`}
                     className="inline-flex items-center gap-1 text-xs text-zinc-400 transition hover:text-white"
                   >
-                    Open WBS
+                    WBS を開く
                     <ExternalLinkIcon className="h-3.5 w-3.5" />
                   </Link>
                 </div>
@@ -393,7 +374,7 @@ export function ProjectList() {
                         {project.nodeCount}
                       </td>
                       <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
-                        {formatRelativeDate(project.updatedAt)}
+                        {formatRelativeDateJa(project.updatedAt)}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { DeleteIcon, PlusIcon } from "@/components/icons";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { listAccounts } from "@/lib/account-store";
 import {
   addProjectAssignee,
@@ -25,6 +26,7 @@ const inputClassName =
 
 export function ProjectAssignees({ projectId }: ProjectAssigneesProps) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [project, setProject] = useState<WbsProject | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
@@ -124,12 +126,19 @@ export function ProjectAssignees({ projectId }: ProjectAssigneesProps) {
     }
 
     const usageCount = countWbsNodesWithAssignee(project.root, assignee.name);
-    const message =
+    const description =
       usageCount > 0
-        ? `「${assignee.name}」を削除しますか？\nWBS 上の ${usageCount} 件の割り当てはそのまま残ります。`
-        : `「${assignee.name}」を削除しますか？`;
+        ? `「${assignee.name}」を削除します。WBS 上の ${usageCount} 件の割り当てはそのまま残ります。`
+        : `「${assignee.name}」を削除します。この操作は取り消せません。`;
 
-    if (!window.confirm(message)) {
+    const confirmed = await confirm({
+      title: "担当者の削除",
+      description,
+      confirmLabel: "削除",
+      tone: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -148,7 +157,7 @@ export function ProjectAssignees({ projectId }: ProjectAssigneesProps) {
   return (
     <div className="px-6 py-8 md:px-10">
       <header className="mb-8">
-        <p className="text-sm text-zinc-500">Project</p>
+        <p className="text-sm text-zinc-500">プロジェクト</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">担当者管理</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
           「{project.name}」で WBS に割り当て可能な担当者を登録します。ここに追加した担当者だけが WBS

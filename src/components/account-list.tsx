@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   DeleteIcon,
   DownloadIcon,
@@ -26,6 +27,7 @@ import { ACCOUNT_PAGE_SIZE, paginateItems } from "@/lib/pagination";
 import type { Account } from "@/types/account";
 
 export function AccountList() {
+  const confirm = useConfirm();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [query, setQuery] = useState("");
@@ -63,7 +65,12 @@ export function AccountList() {
 
   const handleDelete = async (account: Account) => {
     const label = getAccountLabel(account.displayName, account.email);
-    const confirmed = window.confirm(`「${label}」を削除しますか？`);
+    const confirmed = await confirm({
+      title: "アカウントの削除",
+      description: `「${label}」を削除します。この操作は取り消せません。`,
+      confirmLabel: "削除",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }
@@ -127,8 +134,8 @@ export function AccountList() {
     <div className="flex w-full flex-col gap-6 px-6 py-8 md:px-10">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
-            <p className="text-sm text-zinc-500">Accounts</p>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">Overview</h1>
+            <p className="text-sm text-zinc-500">アカウント</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">概要</h1>
           </div>
 
           <Link
@@ -136,7 +143,7 @@ export function AccountList() {
             className="inline-flex items-center justify-center gap-2 rounded-md border border-zinc-700 bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-zinc-200"
           >
             <PlusIcon />
-            Add New
+            新規作成
           </Link>
         </header>
 
@@ -152,7 +159,7 @@ export function AccountList() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search Accounts..."
+              placeholder="アカウントを検索..."
               className="w-full rounded-md border border-zinc-800 bg-zinc-950 py-2 pl-9 pr-3 text-sm text-zinc-200 outline-none focus:border-zinc-600"
             />
           </div>

@@ -4,14 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ExpandFullscreenIcon, ShrinkPanelIcon } from "@/components/icons";
-import { GoogleCalendarButton } from "@/components/google-calendar-button";
+import { TaskDetailFields } from "@/components/task-detail-fields";
 import { WbsStatusBadge } from "@/components/wbs-status-badge";
-import { TaskProgressEditor } from "@/components/task-progress-bar";
 import { formatWbsNodeLabel } from "@/lib/unified-tasks";
 import { updateProjectTask } from "@/lib/task-store";
 import { TASK_PRIORITY_OPTIONS } from "@/lib/task-utils";
 import { formatScheduledRange } from "@/lib/google-calendar";
-import { WBS_STATUS_OPTIONS } from "@/lib/wbs-task-meta";
 import { syncProgressWithStatus } from "@/lib/task-progress";
 import type { ProjectTask, TaskInput } from "@/types/task";
 import type { WbsProject } from "@/types/wbs";
@@ -277,125 +275,49 @@ export function ProjectTaskPanel({
                 </span>
               </div>
 
-              <div className={`grid gap-3 ${expanded ? "md:grid-cols-2" : ""}`}>
-                <label className="flex flex-col gap-1.5 md:col-span-2">
-                  <span className="text-xs text-zinc-500">詳細</span>
-                  <textarea
-                    value={draft.detail}
-                    onChange={(event) => updateDraft({ detail: event.target.value })}
-                    rows={3}
-                    placeholder="タスクの概要や目的..."
-                    className={`${fieldClassName} resize-y leading-6`}
-                  />
-                </label>
+              <label className="flex flex-col gap-1.5 md:col-span-2">
+                <span className="text-xs text-zinc-500">詳細</span>
+                <textarea
+                  value={draft.detail}
+                  onChange={(event) => updateDraft({ detail: event.target.value })}
+                  rows={3}
+                  placeholder="タスクの概要や目的..."
+                  className={`${fieldClassName} resize-y leading-6`}
+                />
+              </label>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">担当者</span>
-                  <select
-                    value={draft.assignee}
-                    onChange={(event) => updateDraft({ assignee: event.target.value })}
-                    className={fieldClassName}
-                  >
-                    <option value="">未割当</option>
-                    {project.assignees.map((assignee) => (
-                      <option key={assignee.id} value={assignee.name}>
-                        {assignee.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">状態</span>
-                  <select
-                    value={draft.status}
-                    onChange={(event) => {
-                      const nextStatus = event.target.value as TaskInput["status"];
-                      const nextProgress = syncProgressWithStatus(nextStatus, draft.progressPercent);
-                      updateDraft({
-                        status: nextStatus,
-                        progressPercent: nextProgress,
-                      });
-                    }}
-                    className={fieldClassName}
-                  >
-                    {WBS_STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <span className="text-xs text-zinc-500">進捗率</span>
-                  <TaskProgressEditor
-                    progressPercent={draft.progressPercent}
-                    status={draft.status}
-                    onChange={(nextProgress, nextStatus) =>
-                      updateDraft({
-                        progressPercent: nextProgress,
-                        status: nextStatus,
-                      })
-                    }
-                  />
-                </div>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">対応開始日</span>
-                  <input
-                    type="date"
-                    value={draft.startDate}
-                    onChange={(event) => updateDraft({ startDate: event.target.value })}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">対応終了日</span>
-                  <input
-                    type="date"
-                    value={draft.endDate}
-                    onChange={(event) => updateDraft({ endDate: event.target.value })}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">対応予定日時</span>
-                  <input
-                    type="datetime-local"
-                    value={draft.scheduledAt}
-                    onChange={(event) => updateDraft({ scheduledAt: event.target.value })}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">対応予定終了日時</span>
-                  <input
-                    type="datetime-local"
-                    value={draft.scheduledEndAt}
-                    onChange={(event) => updateDraft({ scheduledEndAt: event.target.value })}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                {scheduledLabel && (
-                  <p className="text-xs text-zinc-500 md:col-span-2">対応予定: {scheduledLabel}</p>
-                )}
-
-                {draft.scheduledAt && (
-                  <div className="md:col-span-2">
-                    <GoogleCalendarButton
-                      title={draft.title || "タスク"}
-                      startAt={draft.scheduledAt}
-                      endAt={draft.scheduledEndAt || undefined}
-                      description={draft.detail}
-                    />
-                  </div>
-                )}
-              </div>
+              <TaskDetailFields
+                expanded={expanded}
+                assigneeOptions={project.assignees.map((assignee) => assignee.name)}
+                assignee={draft.assignee}
+                onAssigneeChange={(assignee) => updateDraft({ assignee })}
+                status={draft.status}
+                onStatusChange={(nextStatus) => {
+                  const nextProgress = syncProgressWithStatus(nextStatus, draft.progressPercent);
+                  updateDraft({
+                    status: nextStatus,
+                    progressPercent: nextProgress,
+                  });
+                }}
+                progressPercent={draft.progressPercent}
+                onProgressChange={(nextProgress, nextStatus) =>
+                  updateDraft({
+                    progressPercent: nextProgress,
+                    status: nextStatus,
+                  })
+                }
+                startDate={draft.startDate}
+                endDate={draft.endDate}
+                onStartDateChange={(startDate) => updateDraft({ startDate })}
+                onEndDateChange={(endDate) => updateDraft({ endDate })}
+                scheduledAt={draft.scheduledAt}
+                scheduledEndAt={draft.scheduledEndAt}
+                onScheduledAtChange={(scheduledAt) => updateDraft({ scheduledAt })}
+                onScheduledEndAtChange={(scheduledEndAt) => updateDraft({ scheduledEndAt })}
+                scheduledLabel={scheduledLabel}
+                calendarTitle={draft.title || "タスク"}
+                calendarDescription={draft.detail}
+              />
             </section>
 
             <section className="space-y-2">

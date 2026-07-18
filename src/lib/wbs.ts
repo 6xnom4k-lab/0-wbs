@@ -169,6 +169,13 @@ export function hasDescendants(node: WbsNode): boolean {
   return node.children.length > 0;
 }
 
+export function countDescendantNodes(node: WbsNode): number {
+  return node.children.reduce(
+    (total, child) => total + 1 + countDescendantNodes(child),
+    0,
+  );
+}
+
 export function getNodeDepth(tree: WbsNode, nodeId: string): number | null {
   if (tree.id === nodeId) {
     return tree.code === "0" ? -1 : null;

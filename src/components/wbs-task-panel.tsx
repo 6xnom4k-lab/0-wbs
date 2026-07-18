@@ -22,10 +22,8 @@ import {
   formatDateRange,
   formatShortDate,
   normalizeWbsStatus,
-  WBS_STATUS_OPTIONS,
 } from "@/lib/wbs-task-meta";
-import { GoogleCalendarButton } from "@/components/google-calendar-button";
-import { TaskProgressEditor } from "@/components/task-progress-bar";
+import { TaskDetailFields } from "@/components/task-detail-fields";
 import { formatScheduledRange } from "@/lib/google-calendar";
 import { syncProgressWithStatus, computeNodeProgress } from "@/lib/task-progress";
 import { saveProject } from "@/lib/project-store";
@@ -772,161 +770,56 @@ export function WbsTaskPanel({
                     className={`${fieldClassName} min-h-[72px] resize-y leading-6`}
                   />
                 </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">ステータス</span>
-                  <select
-                    value={draft.status}
-                    onChange={(event) => {
-                      const nextStatus = event.target.value as WbsTaskStatus;
-                      const nextProgress = syncProgressWithStatus(
-                        nextStatus,
-                        parseProgressPercent(draft.progressPercent),
-                      );
-                      updateDraft({
-                        status: nextStatus,
-                        progressPercent:
-                          nextProgress !== undefined ? String(nextProgress) : draft.progressPercent,
-                      });
-                    }}
-                    className={fieldClassName}
-                  >
-                    {WBS_STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <span className="text-xs text-zinc-500">進捗率</span>
-                  <TaskProgressEditor
-                    progressPercent={
-                      node && node.children.length > 0
-                        ? computeNodeProgress(node)
-                        : parseProgressPercent(draft.progressPercent)
-                    }
-                    status={draft.status}
-                    readOnly={Boolean(node && node.children.length > 0)}
-                    isRollup={Boolean(node && node.children.length > 0)}
-                    onChange={(nextProgress, nextStatus) =>
-                      updateDraft({
-                        progressPercent: String(nextProgress),
-                        status: nextStatus,
-                      })
-                    }
-                  />
-                </div>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">担当者</span>
-                  {project.assignees.length > 0 ? (
-                    <select
-                      value={draft.assignee}
-                      onChange={(event) => updateDraft({ assignee: event.target.value })}
-                      className={fieldClassName}
-                    >
-                      <option value="">未割当</option>
-                      {project.assignees.map((assignee) => (
-                        <option key={assignee.id} value={assignee.name}>
-                          {assignee.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <>
-                      <input
-                        value={draft.assignee}
-                        onChange={(event) => updateDraft({ assignee: event.target.value })}
-                        placeholder="担当者管理で候補を追加してください"
-                        className={fieldClassName}
-                        disabled
-                      />
-                      <p className="text-[11px] text-zinc-600">
-                        担当者管理で候補を追加すると、ここから選択できます。
-                      </p>
-                    </>
-                  )}
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">開始日</span>
-                  <input
-                    type="date"
-                    value={draft.startDate}
-                    onChange={(event) => updateDraft({ startDate: event.target.value })}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">終了日</span>
-                  <input
-                    type="date"
-                    value={draft.endDate}
-                    onChange={(event) => updateDraft({ endDate: event.target.value })}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">作業工数</span>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={draft.effort}
-                    onChange={(event) => updateDraft({ effort: event.target.value })}
-                    placeholder="例: 3"
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">対応予定日時</span>
-                  <input
-                    type="datetime-local"
-                    value={draft.scheduledAt}
-                    onChange={(event) => updateDraft({ scheduledAt: event.target.value })}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs text-zinc-500">対応予定終了日時</span>
-                  <input
-                    type="datetime-local"
-                    value={draft.scheduledEndAt}
-                    onChange={(event) => updateDraft({ scheduledEndAt: event.target.value })}
-                    className={fieldClassName}
-                  />
-                </label>
-
-                {scheduleLabel && (
-                  <p className="text-xs text-zinc-500 md:col-span-2">対応期間: {scheduleLabel}</p>
-                )}
-
-                {scheduledLabel && (
-                  <p className="text-xs text-zinc-500 md:col-span-2">
-                    対応予定: {scheduledLabel}
-                  </p>
-                )}
-
-                {draft.scheduledAt && (
-                  <div className="md:col-span-2">
-                    <GoogleCalendarButton
-                      title={`[${project.name}] ${node.name}`}
-                      startAt={draft.scheduledAt}
-                      endAt={draft.scheduledEndAt || undefined}
-                      description={calendarDescription}
-                    />
-                    <p className="mt-2 text-[11px] text-zinc-600">
-                      終了日時が未設定の場合、Googleカレンダーでは1時間の予定として追加されます。
-                    </p>
-                  </div>
-                )}
               </div>
+
+              <TaskDetailFields
+                expanded={expanded}
+                assigneeOptions={project.assignees.map((assignee) => assignee.name)}
+                assignee={draft.assignee}
+                onAssigneeChange={(assignee) => updateDraft({ assignee })}
+                assigneeDisabled
+                assigneeHelpText="担当者管理で候補を追加すると、ここから選択できます。"
+                status={draft.status}
+                onStatusChange={(nextStatus) => {
+                  const nextProgress = syncProgressWithStatus(
+                    nextStatus,
+                    parseProgressPercent(draft.progressPercent),
+                  );
+                  updateDraft({
+                    status: nextStatus,
+                    progressPercent:
+                      nextProgress !== undefined ? String(nextProgress) : draft.progressPercent,
+                  });
+                }}
+                progressPercent={
+                  node && node.children.length > 0
+                    ? computeNodeProgress(node)
+                    : parseProgressPercent(draft.progressPercent)
+                }
+                progressReadOnly={Boolean(node && node.children.length > 0)}
+                isRollup={Boolean(node && node.children.length > 0)}
+                onProgressChange={(nextProgress, nextStatus) =>
+                  updateDraft({
+                    progressPercent: String(nextProgress),
+                    status: nextStatus,
+                  })
+                }
+                startDate={draft.startDate}
+                endDate={draft.endDate}
+                onStartDateChange={(startDate) => updateDraft({ startDate })}
+                onEndDateChange={(endDate) => updateDraft({ endDate })}
+                scheduledAt={draft.scheduledAt}
+                scheduledEndAt={draft.scheduledEndAt}
+                onScheduledAtChange={(scheduledAt) => updateDraft({ scheduledAt })}
+                onScheduledEndAtChange={(scheduledEndAt) => updateDraft({ scheduledEndAt })}
+                scheduleLabel={scheduleLabel}
+                scheduledLabel={scheduledLabel}
+                calendarTitle={`[${project.name}] ${node.name}`}
+                calendarDescription={calendarDescription}
+                showEffort
+                effort={draft.effort}
+                onEffortChange={(effort) => updateDraft({ effort })}
+              />
             </section>
 
             <section className="space-y-2">

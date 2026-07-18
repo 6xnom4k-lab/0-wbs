@@ -1,16 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MeetingNotesImportDialog } from "@/components/meeting-notes-import-dialog";
 import { TaskProgressSummary } from "@/components/task-progress-bar";
+import { WbsBoardSkeleton } from "@/components/ui/skeleton";
+import { WorkflowGuide } from "@/components/workflow-guide";
 import { WbsGanttBoard } from "@/components/wbs-gantt-board";
 import { WbsTaskPanel } from "@/components/wbs-task-panel";
 import { getProject, saveProject } from "@/lib/project-store";
+import { createProjectTask } from "@/lib/task-store";
 import { listProjectAssigneeNames, normalizeProjectAssignees } from "@/lib/project-assignees";
 import { countNodes, findNode, normalizeProjectRoot, touchProject } from "@/lib/wbs";
 import { computeWbsBoardProgressStats } from "@/lib/task-progress";
+import type { ApplyImportResult } from "@/types/meeting-notes";
 import type { WbsProject } from "@/types/wbs";
 
 type WbsEditorProps = {
@@ -119,20 +124,35 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
   );
 
   const handleImportApply = useCallback(
-    (root: WbsProject["root"], result: { appliedCount: number; skippedCount: number }) => {
+    async (result: ApplyImportResult) => {
       if (!project) {
         return;
       }
 
-      handleProjectChange({ ...project, root });
+      handleProjectChange({ ...project, root: result.root });
+
+      for (const input of result.manualTaskInputs) {
+        await createProjectTask(projectId, input);
+      }
+
+      const parts: string[] = [];
+      if (result.wbsAppliedCount > 0) {
+        parts.push(`WBS 構造に ${result.wbsAppliedCount} 件`);
+      }
+      if (result.manualTasksCreated > 0) {
+        parts.push(`付箋タスク ${result.manualTasksCreated} 件`);
+      }
+
       setImportFeedback(
-        `${result.appliedCount} 件を WBS に反映しました。${
-          result.skippedCount > 0 ? `（${result.skippedCount} 件スキップ）` : ""
+        `${parts.join("・")}を反映しました。${
+          result.wbsSkippedCount + result.manualTasksSkipped > 0
+            ? `（${result.wbsSkippedCount + result.manualTasksSkipped} 件スキップ）`
+            : ""
         }`,
       );
       setIsImportOpen(false);
     },
-    [handleProjectChange, project],
+    [handleProjectChange, project, projectId],
   );
 
   const openTask = useCallback(
@@ -166,8 +186,12 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
 
   if (!isReady || !project) {
     return (
-      <div className="px-6 py-10">
-        <p className="text-sm text-zinc-500">読み込み中...</p>
+      <div className="px-6 py-8 md:px-10">
+        <header className="mb-8">
+          <p className="text-sm text-zinc-500">プロジェクト</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">WBS 構造</h1>
+        </header>
+        <WbsBoardSkeleton />
       </div>
     );
   }
@@ -176,14 +200,22 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
     <>
       <div className="px-6 py-8 md:px-10">
         <header className="mb-8">
-          <p className="text-sm text-zinc-500">Project</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">
-            WBS + ガントチャート
-          </h1>
+          <p className="text-sm text-zinc-500">プロジェクト</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">WBS 構造</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            左側で作業項目を編集し、右側で各タスクのスケジュールを確認できます。変更は自動的に保存されます。
+            会議で合意した作業分解（骨格）を編集します。左で項目を編集し、右のガントで期間と進捗を確認できます。
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+            <Link
+              href={`/projects/${projectId}/tasks`}
+              className="text-sky-400 transition hover:text-sky-300"
+            >
+              追加タスク（付箋）はタスク実行へ →
+            </Link>
+          </div>
         </header>
+
+        <WorkflowGuide className="mb-6" />
 
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-zinc-800 bg-zinc-950 p-4">

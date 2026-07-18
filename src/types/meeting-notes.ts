@@ -1,3 +1,4 @@
+import type { TaskInput, TaskPriority } from "@/types/task";
 import type { WbsTaskStatus } from "@/types/wbs";
 
 export type WbsProposalAction = "create" | "update";
@@ -40,7 +41,12 @@ export type MeetingNotesAnalyzeRequest = {
 
 export type MeetingNotesAnalyzeResponse = {
   proposals: WbsTaskProposal[];
+  taskProposals: ManualTaskProposal[];
   summary: string;
+};
+
+export type ProposalSelection = WbsTaskProposal & {
+  selected: boolean;
 };
 
 export type ApplyProposalsResult = {
@@ -49,6 +55,31 @@ export type ApplyProposalsResult = {
   skipped: Array<{ proposalId: string; reason: string }>;
 };
 
-export type ProposalSelection = WbsTaskProposal & {
+export type ApplyImportResult = {
+  root: import("@/types/wbs").WbsNode;
+  wbsAppliedCount: number;
+  wbsSkippedCount: number;
+  manualTasksCreated: number;
+  manualTasksSkipped: number;
+  manualTaskInputs: TaskInput[];
+};
+
+export type ManualTaskProposal = {
+  id: string;
+  title: string;
+  category?: string;
+  detail?: string;
+  assignee?: string;
+  wbsNodeId?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: WbsTaskStatus;
+  priority?: TaskPriority;
+  notes?: string;
+  confidence: WbsProposalConfidence;
+  reasoning: string;
+};
+
+export type ManualTaskProposalSelection = ManualTaskProposal & {
   selected: boolean;
 };

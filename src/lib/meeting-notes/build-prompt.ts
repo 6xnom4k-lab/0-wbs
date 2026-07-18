@@ -7,7 +7,7 @@ export const MEETING_NOTES_MAX_LENGTH = 30_000;
 export const MEETING_NOTES_RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["summary", "proposals"],
+  required: ["summary", "proposals", "taskProposals"],
   properties: {
     summary: {
       type: "string",
@@ -75,6 +75,55 @@ export const MEETING_NOTES_RESPONSE_SCHEMA = {
         },
       },
     },
+    taskProposals: {
+      type: "array",
+      description:
+        "Additional manual tasks (付箋) that do not fit WBS structure — follow-ups, ad-hoc action items.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "title",
+          "category",
+          "detail",
+          "assignee",
+          "wbsNodeId",
+          "startDate",
+          "endDate",
+          "status",
+          "priority",
+          "notes",
+          "confidence",
+          "reasoning",
+        ],
+        properties: {
+          title: { type: "string" },
+          category: { type: ["string", "null"] },
+          detail: { type: ["string", "null"] },
+          assignee: { type: ["string", "null"] },
+          wbsNodeId: {
+            type: ["string", "null"],
+            description: "Optional link to related WBS node id from context.",
+          },
+          startDate: { type: ["string", "null"], description: "YYYY-MM-DD" },
+          endDate: { type: ["string", "null"], description: "YYYY-MM-DD" },
+          status: {
+            type: ["string", "null"],
+            enum: ["not_started", "in_progress", "done", "on_hold", null],
+          },
+          priority: {
+            type: ["string", "null"],
+            enum: ["high", "medium", "low", null],
+          },
+          notes: { type: ["string", "null"] },
+          confidence: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+          },
+          reasoning: { type: "string" },
+        },
+      },
+    },
   },
 } as const;
 
@@ -102,6 +151,8 @@ Rules:
 - Use action "create" for new tasks not clearly matching existing WBS items.
 - Use action "update" when meeting notes clearly refer to an existing WBS item (match by id from context).
 - For updates, only include fields that should change; use null for unknown optional fields.
+- Put follow-up items, one-off actions, or tasks that don't belong in WBS hierarchy in taskProposals (付箋タスク).
+- taskProposals are for the task execution board, not the WBS tree — use when the item is actionable but not part of agreed WBS structure.
 - Dates must be YYYY-MM-DD when provided.
 - status values: not_started, in_progress, done, on_hold.
 - WBS has max 3 levels (depth 0=top category, 1=child, 2=grandchild). Prefer parentNodeId at depth 0 or 1 for new items.

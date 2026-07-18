@@ -12,7 +12,16 @@ import { TaskForm } from "@/components/task-form";
 import { WbsTaskPanel } from "@/components/wbs-task-panel";
 import { WbsStatusQuickSelect } from "@/components/wbs-status-badge";
 import { TaskProgressEditor, TaskProgressSummary } from "@/components/task-progress-bar";
-import { listProjectAssigneeNames } from "@/lib/project-assignees";
+import { TaskListSkeleton } from "@/components/ui/skeleton";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import {
+  assigneeSuggestionNames,
+  buildAssigneeSuggestions,
+  type AssigneeSuggestion,
+} from "@/lib/assignee-suggestions";
+import { listAccounts } from "@/lib/account-store";
+import { TaskSourceBadge } from "@/components/task-source-badge";
+import { WorkflowGuide } from "@/components/workflow-guide";
 import { getProject, saveProject } from "@/lib/project-store";
 import {
   createProjectTask,
@@ -22,12 +31,14 @@ import {
   updateProjectTask,
 } from "@/lib/task-store";
 import {
-  buildUnifiedTasks,
+  countMyPendingTasks,
   filterUnifiedTasks,
   groupTasksByAssignee,
   listAssigneeNames,
-  listWbsNodeOptions,
-} from "@/lib/unified-tasks";
+  type TaskQuickFilter,
+} from "@/lib/task-filters";
+import { readMyAssigneeName, writeMyAssigneeName } from "@/lib/my-assignee";
+import { buildUnifiedTasks, listWbsNodeOptions } from "@/lib/unified-tasks";
 import {
   emptyTaskInput,
   formatTaskPeriod,
@@ -53,18 +64,8 @@ type FormMode =
   | { type: "create" }
   | { type: "edit"; taskId: string };
 
-function TaskSourceBadge({ source }: { source: UnifiedTask["source"] }) {
-  return (
-    <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
-        source === "wbs"
-          ? "bg-sky-950/50 text-sky-300 ring-sky-900/60"
-          : "bg-violet-950/50 text-violet-300 ring-violet-900/60"
-      }`}
-    >
-      {source === "wbs" ? "WBS" : "追加"}
-    </span>
-  );
+function TaskSourceBadgeWrapper({ source }: { source: UnifiedTask["source"] }) {
+  return <TaskSourceBadge source={source} compact />;
 }
 
 type TaskTableProps = {
@@ -107,25 +108,25 @@ function TaskTable({
       <table className="min-w-full border-collapse text-sm">
         <thead className="bg-black/40 text-left text-xs font-medium uppercase tracking-wide text-zinc-500">
           <tr>
-            <th className="px-4 py-3">種別</th>
-            <th className="px-4 py-3">WBS 割当</th>
-            <th className="px-4 py-3">担当</th>
-            <th className="px-4 py-3">大項目</th>
-            <th className="px-4 py-3">項目</th>
-            <th className="hidden px-4 py-3 lg:table-cell">詳細</th>
-            <th className="px-4 py-3">状態</th>
-            <th className="px-4 py-3">進捗</th>
-            <th className="px-4 py-3">優先度</th>
-            <th className="px-4 py-3">対応期間</th>
-            <th className="px-4 py-3">対応予定</th>
-            <th className="px-4 py-3 text-right">操作</th>
+            <th scope="col" className="px-4 py-3">種別</th>
+            <th scope="col" className="px-4 py-3">WBS 割当</th>
+            <th scope="col" className="px-4 py-3">担当</th>
+            <th scope="col" className="px-4 py-3">大項目</th>
+            <th scope="col" className="px-4 py-3">項目</th>
+            <th scope="col" className="hidden px-4 py-3 lg:table-cell">詳細</th>
+            <th scope="col" className="px-4 py-3">状態</th>
+            <th scope="col" className="px-4 py-3">進捗</th>
+            <th scope="col" className="px-4 py-3">優先度</th>
+            <th scope="col" className="px-4 py-3">対応期間</th>
+            <th scope="col" className="px-4 py-3">対応予定</th>
+            <th scope="col" className="px-4 py-3 text-right">操作</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-800">
           {tasks.map((task) => (
             <tr key={task.key} className="transition hover:bg-zinc-900/50">
               <td className="whitespace-nowrap px-4 py-2.5">
-                <TaskSourceBadge source={task.source} />
+                <TaskSourceBadgeWrapper source={task.source} />
               </td>
               <td className="max-w-[14rem] px-4 py-2.5 text-zinc-400">
                 {task.wbsLabel ? (
@@ -261,14 +262,17 @@ function TaskTable({
 export function ProjectTasks({ projectId }: ProjectTasksProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const confirm = useConfirm();
   const activeWbsId = searchParams.get("wbs");
   const activeTaskId = searchParams.get("task");
   const [project, setProject] = useState<WbsProject | null>(null);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
-  const [assigneeSuggestions, setAssigneeSuggestions] = useState<string[]>([]);
+  const [assigneeSuggestions, setAssigneeSuggestions] = useState<AssigneeSuggestion[]>([]);
   const [query, setQuery] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<WbsTaskStatus | "all">("all");
+  const [quickFilter, setQuickFilter] = useState<TaskQuickFilter>("all");
+  const [myAssigneeName, setMyAssigneeName] = useState("");
   const [viewMode, setViewMode] = useState<TaskViewMode>("all");
   const [formMode, setFormMode] = useState<FormMode>({ type: "closed" });
   const [formError, setFormError] = useState<string | null>(null);
@@ -277,10 +281,11 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
   const [categories, setCategories] = useState<string[]>([]);
 
   const refreshData = async () => {
-    const [loadedProject, nextTasks, nextCategories] = await Promise.all([
+    const [loadedProject, nextTasks, nextCategories, accounts] = await Promise.all([
       getProject(projectId),
       listProjectTasks(projectId),
       listProjectTaskCategories(projectId),
+      listAccounts(),
     ]);
 
     if (!loadedProject) {
@@ -291,7 +296,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
     setProject(loadedProject);
     setTasks(nextTasks);
     setCategories(nextCategories);
-    setAssigneeSuggestions(listProjectAssigneeNames(loadedProject));
+    setAssigneeSuggestions(buildAssigneeSuggestions(loadedProject, accounts));
     return true;
   };
 
@@ -303,6 +308,15 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
       }
     })();
   }, [projectId, router]);
+
+  useEffect(() => {
+    const savedAssignee = readMyAssigneeName();
+    setMyAssigneeName(savedAssignee);
+    if (savedAssignee) {
+      setQuickFilter("my_pending");
+      setAssigneeFilter(savedAssignee);
+    }
+  }, []);
 
   const unifiedTasks = useMemo(() => {
     if (!project) {
@@ -320,8 +334,15 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
         query,
         assignee: assigneeFilter,
         status: statusFilter,
+        quickFilter,
+        myAssigneeName,
       }),
-    [assigneeFilter, query, statusFilter, unifiedTasks],
+    [assigneeFilter, myAssigneeName, query, quickFilter, statusFilter, unifiedTasks],
+  );
+
+  const myPendingCount = useMemo(
+    () => countMyPendingTasks(unifiedTasks, myAssigneeName),
+    [myAssigneeName, unifiedTasks],
   );
 
   const groupedTasks = useMemo(
@@ -385,7 +406,12 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
     }
 
     const label = task.category ? `${task.category} / ${task.title}` : task.title;
-    const confirmed = window.confirm(`「${label}」を削除しますか？`);
+    const confirmed = await confirm({
+      title: "タスクの削除",
+      description: `「${label}」を削除します。この操作は取り消せません。`,
+      confirmLabel: "削除",
+      tone: "danger",
+    });
     if (!confirmed) {
       return;
     }
@@ -527,10 +553,18 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
     <div className="px-6 py-8 md:px-10">
       <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm text-zinc-500">Project</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">タスク管理</h1>
+          <p className="text-sm text-zinc-500">プロジェクト</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">タスク実行</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            WBS の作業項目と追加タスクをまとめて管理します。項目名または「詳細」から内容を編集できます。
+            WBS 構造の作業項目（骨格）と、それ以外の追加タスク（付箋）をまとめて確認・更新します。
+            骨格の編集は{" "}
+            <Link
+              href={`/projects/${projectId}/wbs`}
+              className="text-sky-400 transition hover:text-sky-300"
+            >
+              WBS 構造
+            </Link>
+            から行います。
           </p>
         </div>
 
@@ -559,8 +593,25 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
       </header>
 
       <section className="mb-4">
-        <TaskProgressSummary stats={progressStats} />
+        <TaskProgressSummary
+          stats={progressStats}
+          myPendingCount={myPendingCount}
+          onFilterClick={(filter) => {
+            setQuickFilter(filter);
+            if (filter === "my_pending" && myAssigneeName) {
+              setAssigneeFilter(myAssigneeName);
+              setStatusFilter("all");
+            } else if (filter !== "my_pending" && filter !== "overdue") {
+              setStatusFilter(filter);
+              setQuickFilter(filter);
+            } else {
+              setStatusFilter("all");
+            }
+          }}
+        />
       </section>
+
+      <WorkflowGuide className="mb-4" />
 
       <section className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3">
         <div className="flex rounded-md border border-zinc-800 p-0.5">
@@ -590,6 +641,52 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
 
         {viewMode === "all" && (
           <>
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <span>自分</span>
+              <select
+                value={myAssigneeName}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setMyAssigneeName(next);
+                  writeMyAssigneeName(next);
+                  if (next && quickFilter === "my_pending") {
+                    setAssigneeFilter(next);
+                  }
+                }}
+                className="rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600"
+              >
+                <option value="">未設定</option>
+                {assigneeNames
+                  .filter((name) => name !== "未割当")
+                  .map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <span>クイック</span>
+              <select
+                value={quickFilter}
+                onChange={(event) => {
+                  const next = event.target.value as TaskQuickFilter;
+                  setQuickFilter(next);
+                  if (next === "all") {
+                    setStatusFilter("all");
+                  }
+                }}
+                className="rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600"
+              >
+                <option value="all">すべて</option>
+                <option value="my_pending">自分の未完了</option>
+                <option value="overdue">期限超過</option>
+                <option value="not_started">未着手</option>
+                <option value="in_progress">進行中</option>
+                <option value="done">完了</option>
+                <option value="on_hold">保留</option>
+              </select>
+            </label>
             <label className="flex items-center gap-2 text-xs text-zinc-400">
               <span>担当者</span>
               <select
@@ -634,11 +731,16 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
 
       {formMode.type !== "closed" && (
         <section className="mb-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
-          <h2 className="text-sm font-medium text-white">
-            {formMode.type === "edit" ? "追加タスクを編集" : "追加タスクを作成"}
-          </h2>
+          <p className="text-sm font-medium text-zinc-400">
+            {formMode.type === "edit" ? "付箋タスクを編集" : "付箋タスクを作成"}
+          </p>
           <p className="mt-1 text-xs text-zinc-500">
-            WBS 項目そのものは WBS 画面で編集します。ここでは WBS に紐づく追加タスクを管理します。
+            WBS 構造にない作業を追加します。後から WBS 項目へ紐付けできます。WBS
+            項目そのものは{" "}
+            <Link href={`/projects/${projectId}/wbs`} className="text-sky-400 hover:text-sky-300">
+              WBS 構造
+            </Link>
+            で編集してください。
           </p>
           {formError && <p className="mt-2 text-sm text-red-400">{formError}</p>}
           <div className="mt-4">
@@ -646,7 +748,8 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
               key={formMode.type === "edit" ? formMode.taskId : "create"}
               initialValues={formInitialValues}
               categorySuggestions={categories}
-              assigneeSuggestions={assigneeSuggestions}
+              assigneeSuggestions={assigneeSuggestionNames(assigneeSuggestions)}
+              assigneeSuggestionDetails={assigneeSuggestions}
               wbsNodeOptions={wbsNodeOptions}
               submitLabel={formMode.type === "edit" ? "更新" : "追加"}
               onSubmit={handleSubmit}
@@ -661,7 +764,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
 
       <section className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
         {!isReady ? (
-          <div className="px-4 py-10 text-center text-sm text-zinc-500">読み込み中...</div>
+          <TaskListSkeleton />
         ) : unifiedTasks.length === 0 ? (
           <div className="px-4 py-16 text-center">
             <p className="text-sm text-zinc-400">WBS に作業項目がまだありません。</p>

@@ -4,8 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { TaskProgressBar } from "@/components/task-progress-bar";
 import { GanttIcon, TaskListIcon, UsersIcon } from "@/components/icons";
 import { getProject } from "@/lib/project-store";
+import { computeWbsBoardProgressStats } from "@/lib/task-progress";
+import type { WbsProject } from "@/types/wbs";
 
 type ProjectSidebarProps = {
   projectId: string;
@@ -14,12 +17,12 @@ type ProjectSidebarProps = {
 const menuItems = [
   {
     suffix: "wbs",
-    label: "WBS + ガントチャート",
+    label: "WBS 構造",
     icon: GanttIcon,
   },
   {
     suffix: "tasks",
-    label: "タスク管理",
+    label: "タスク実行",
     icon: TaskListIcon,
   },
   {
@@ -31,15 +34,18 @@ const menuItems = [
 
 export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
   const pathname = usePathname();
-  const [projectName, setProjectName] = useState("プロジェクト");
+  const [project, setProject] = useState<WbsProject | null>(null);
 
   useEffect(() => {
-    void getProject(projectId).then((project) => {
-      if (project) {
-        setProjectName(project.name);
+    void getProject(projectId).then((loaded) => {
+      if (loaded) {
+        setProject(loaded);
       }
     });
   }, [projectId]);
+
+  const projectName = project?.name ?? "プロジェクト";
+  const progressStats = project ? computeWbsBoardProgressStats(project.root) : null;
 
   return (
     <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-zinc-800 bg-black text-zinc-300">
@@ -56,9 +62,22 @@ export function ProjectSidebar({ projectId }: ProjectSidebarProps) {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-white">{projectName}</p>
-            <p className="truncate text-xs text-zinc-500">Project</p>
+            <p className="truncate text-xs text-zinc-500">プロジェクト</p>
           </div>
         </div>
+
+        {progressStats && progressStats.total > 0 && (
+          <div className="mt-3 space-y-1.5">
+            <p className="text-[10px] leading-4 text-zinc-500">
+              全体進捗 {progressStats.averageProgress}%
+              <span className="text-zinc-600">
+                {" "}
+                （完了 {progressStats.done}/{progressStats.total}）
+              </span>
+            </p>
+            <TaskProgressBar percent={progressStats.averageProgress} compact />
+          </div>
+        )}
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 px-2 py-3">

@@ -3,7 +3,18 @@ import { resolveProgressPercent } from "@/lib/task-progress";
 import { normalizeWbsStatus } from "@/lib/wbs-task-meta";
 import type { ProjectTask } from "@/types/task";
 import type { UnifiedTask } from "@/types/unified-task";
-import type { WbsNode, WbsProject, WbsTaskStatus } from "@/types/wbs";
+import type { WbsNode, WbsProject } from "@/types/wbs";
+
+export {
+  countMyPendingTasks,
+  filterUnifiedTasks,
+  groupTasksByAssignee,
+  isMyPendingTask,
+  isTaskOverdue,
+  listAssigneeNames,
+  matchesUnifiedTaskQuery,
+  type TaskQuickFilter,
+} from "@/lib/task-filters";
 
 export type WbsNodeOption = {
   id: string;
@@ -85,80 +96,4 @@ export function buildUnifiedTasks(
   }));
 
   return [...wbsTasks, ...manualUnified];
-}
-
-export function listAssigneeNames(tasks: UnifiedTask[]): string[] {
-  const names = new Set<string>();
-
-  for (const task of tasks) {
-    names.add(task.assignee.trim() || "未割当");
-  }
-
-  return [...names].sort((left, right) => {
-    if (left === "未割当") {
-      return 1;
-    }
-
-    if (right === "未割当") {
-      return -1;
-    }
-
-    return left.localeCompare(right, "ja");
-  });
-}
-
-export function groupTasksByAssignee(
-  tasks: UnifiedTask[],
-): Array<{ assignee: string; tasks: UnifiedTask[] }> {
-  const groups = new Map<string, UnifiedTask[]>();
-
-  for (const task of tasks) {
-    const assignee = task.assignee.trim() || "未割当";
-    const bucket = groups.get(assignee) ?? [];
-    bucket.push(task);
-    groups.set(assignee, bucket);
-  }
-
-  return listAssigneeNames(tasks).map((assignee) => ({
-    assignee,
-    tasks: groups.get(assignee) ?? [],
-  }));
-}
-
-export function matchesUnifiedTaskQuery(task: UnifiedTask, query: string): boolean {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return true;
-  }
-
-  return [
-    task.category,
-    task.title,
-    task.detail,
-    task.assignee,
-    task.wbsLabel,
-  ]
-    .join(" ")
-    .toLowerCase()
-    .includes(normalizedQuery);
-}
-
-export function filterUnifiedTasks(
-  tasks: UnifiedTask[],
-  options: { query?: string; assignee?: string; status?: WbsTaskStatus | "all" },
-): UnifiedTask[] {
-  return tasks.filter((task) => {
-    if (options.assignee && options.assignee !== "all") {
-      const taskAssignee = task.assignee.trim() || "未割当";
-      if (taskAssignee !== options.assignee) {
-        return false;
-      }
-    }
-
-    if (options.status && options.status !== "all" && task.status !== options.status) {
-      return false;
-    }
-
-    return matchesUnifiedTaskQuery(task, options.query ?? "");
-  });
 }
