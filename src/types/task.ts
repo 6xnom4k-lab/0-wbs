@@ -13,6 +13,8 @@ export type ProjectTask = {
   assignee: string;
   wbsNodeId: string;
   status: WbsTaskStatus;
+  /** 進捗率 0–100 */
+  progressPercent?: number;
   priority: TaskPriority;
   startDate: string;
   endDate: string;
@@ -33,6 +35,7 @@ export type TaskInput = Pick<
   | "assignee"
   | "wbsNodeId"
   | "status"
+  | "progressPercent"
   | "priority"
   | "startDate"
   | "endDate"

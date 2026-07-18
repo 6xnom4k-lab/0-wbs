@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent } from "
 
 import { GanttCalendarHeader, GanttCalendarRow } from "@/components/gantt-calendar";
 import { IconButton } from "@/components/icon-button";
+import { TaskProgressEditor } from "@/components/task-progress-bar";
 import { WbsStatusQuickSelect } from "@/components/wbs-status-badge";
 import { WbsAssigneeQuickSelect } from "@/components/wbs-assignee-quick-select";
 import {
@@ -24,6 +25,10 @@ import {
   getGanttBarRender,
 } from "@/lib/gantt-utils";
 import { useResizableSplit } from "@/hooks/use-resizable-split";
+import {
+  computeNodeProgress,
+  syncProgressWithStatus,
+} from "@/lib/task-progress";
 import {
   formatEffort,
   formatTableDate,
@@ -86,19 +91,19 @@ type WbsGanttRowProps = {
 
 const INDENT_STEP = 18;
 const BASE_PADDING = 12;
-const WBS_TABLE_MIN_WIDTH = 760;
+const WBS_TABLE_MIN_WIDTH = 820;
 const WBS_GANTT_SPLIT_STORAGE_KEY = "0-wbs-wbs-gantt-split-ratio";
 const WBS_GANTT_DEFAULT_SPLIT_RATIO = 0.6;
 const WBS_GRID_COLS =
-  "28px minmax(168px,1.4fr) minmax(108px,1fr) 64px 76px 76px 72px 40px minmax(80px,0.9fr) 68px";
+  "28px minmax(200px,2fr) minmax(108px,1fr) 64px 76px 76px 72px minmax(88px,1fr) 40px minmax(80px,0.9fr) 68px";
 
 function WbsTableHeader() {
   return (
     <div
-      className="grid shrink-0 items-center border-b border-zinc-800 bg-black/40 text-[10px] font-medium text-zinc-500"
+      className="grid shrink-0 items-center border-b border-zinc-800 bg-black/40 py-1.5 text-[10px] font-medium leading-4 text-zinc-500"
       style={{
         gridTemplateColumns: WBS_GRID_COLS,
-        height: GANTT_HEADER_HEIGHT,
+        minHeight: GANTT_HEADER_HEIGHT,
         minWidth: WBS_TABLE_MIN_WIDTH,
       }}
     >
@@ -109,6 +114,7 @@ function WbsTableHeader() {
       <span className="px-1">開始</span>
       <span className="px-1">終了</span>
       <span className="px-1">状態</span>
+      <span className="px-1">進捗</span>
       <span className="px-1 text-center">工数</span>
       <span className="px-1">備考</span>
       <span />
@@ -128,7 +134,10 @@ function WbsMetaCell({
   }
 
   return (
-    <span className={`block truncate px-1 text-[10px] text-zinc-400 ${className}`} title={value}>
+    <span
+      className={`block truncate px-1 text-[10px] leading-4 text-zinc-400 ${className}`}
+      title={value}
+    >
       {value}
     </span>
   );
@@ -528,9 +537,24 @@ function WbsRowLeft({
       updateNode(root, row.id, (current) => ({
         ...current,
         status: nextStatus,
+        progressPercent: syncProgressWithStatus(nextStatus, current.progressPercent),
       })),
     );
   };
+
+  const handleProgressChange = (nextProgress: number, nextStatus: WbsTaskStatus) => {
+    onChange(
+      updateNode(root, row.id, (current) => ({
+        ...current,
+        progressPercent: nextProgress,
+        status: nextStatus,
+      })),
+    );
+  };
+
+  const taskNode = findNode(root, row.id);
+  const isRollup = Boolean(taskNode && taskNode.children.length > 0);
+  const rollupProgress = taskNode ? computeNodeProgress(taskNode) : 0;
 
   const handleAssigneeChange = (assignee: string) => {
     onChange(
@@ -544,13 +568,13 @@ function WbsRowLeft({
   return (
     <Fragment>
       <div
-        className={`group/row grid w-full items-center gap-0 border-b border-zinc-800 py-0.5 transition-colors group-hover/row:bg-zinc-900/60 ${
+        className={`group/row grid w-full items-center gap-0 overflow-visible border-b border-zinc-800 py-1.5 transition-colors group-hover/row:bg-zinc-900/60 ${
           row.isRoot ? "bg-zinc-950" : "bg-zinc-950/80"
         } ${getRowChromeClasses(row, rowIndex, isDragging, dropPosition)}`}
         style={{
           gridTemplateColumns: WBS_GRID_COLS,
           minWidth: WBS_TABLE_MIN_WIDTH,
-          height: GANTT_ROW_HEIGHT,
+          minHeight: GANTT_ROW_HEIGHT,
         }}
         onDragOver={handleRowDragOver}
         onDrop={handleRowDrop}
@@ -564,12 +588,12 @@ function WbsRowLeft({
         </div>
 
         <div
-          className="flex min-w-0 items-center gap-0.5 pr-1"
+          className="flex min-w-0 items-center gap-0.5 self-stretch py-0.5 pr-1"
           style={{ paddingLeft: BASE_PADDING + row.depth * INDENT_STEP }}
         >
           <WbsCollapseToggle row={row} onToggle={() => onToggleCollapse(row.id)} />
           <span
-            className={`shrink-0 font-mono tabular-nums ${
+            className={`shrink-0 font-mono tabular-nums leading-5 ${
               row.isRoot ? "text-xs font-medium text-zinc-400" : "text-[11px] text-zinc-500"
             }`}
           >
@@ -577,6 +601,7 @@ function WbsRowLeft({
           </span>
           <input
             value={draftName}
+            title={draftName}
             onChange={(event) => setDraftName(event.target.value)}
             onBlur={handleRename}
             onKeyDown={(event) => {
@@ -584,8 +609,8 @@ function WbsRowLeft({
                 event.currentTarget.blur();
               }
             }}
-            className={`min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 outline-none focus:border-zinc-700 ${
-              row.isRoot ? "text-sm font-semibold text-white" : "text-sm text-zinc-200"
+            className={`min-h-7 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 py-1 text-sm leading-5 outline-none focus:border-zinc-700 ${
+              row.isRoot ? "font-semibold text-white" : "text-zinc-200"
             }`}
           />
           {row.isCollapsed && row.hiddenCount > 0 && (
@@ -611,6 +636,16 @@ function WbsRowLeft({
             status={row.status}
             compact
             onStatusChange={handleStatusChange}
+          />
+        </div>
+        <div className="px-1">
+          <TaskProgressEditor
+            progressPercent={isRollup ? rollupProgress : row.progressPercent}
+            status={row.status}
+            compact
+            readOnly={isRollup}
+            isRollup={isRollup}
+            onChange={handleProgressChange}
           />
         </div>
         <span className="block px-1 text-center text-[10px] tabular-nums text-zinc-400">
@@ -885,10 +920,21 @@ export function WbsGanttBoard({ root, assigneeOptions, onChange, onOpenTask }: W
             )}
 
             {rows.map((row, index) => {
-              const bar = getGanttBarRender(row.startDate, row.endDate, row.status, timeline);
+              const node = findNode(root, row.id);
+              const barProgress = node
+                ? node.children.length > 0
+                  ? computeNodeProgress(node)
+                  : row.progressPercent
+                : row.progressPercent;
+              const bar = getGanttBarRender(
+                row.startDate,
+                row.endDate,
+                row.status,
+                timeline,
+                barProgress,
+              );
               const isDropTarget = dropTarget?.id === row.id;
               const dropPosition = isDropTarget ? dropTarget.position : null;
-              const node = findNode(root, row.id);
 
               const handleRowDragOver = (event: DragEvent<HTMLDivElement>) => {
                 event.preventDefault();

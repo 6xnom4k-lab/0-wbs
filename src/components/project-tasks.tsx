@@ -11,6 +11,7 @@ import { ProjectTaskPanel } from "@/components/project-task-panel";
 import { TaskForm } from "@/components/task-form";
 import { WbsTaskPanel } from "@/components/wbs-task-panel";
 import { WbsStatusQuickSelect } from "@/components/wbs-status-badge";
+import { TaskProgressEditor, TaskProgressSummary } from "@/components/task-progress-bar";
 import { listProjectAssigneeNames } from "@/lib/project-assignees";
 import { getProject, saveProject } from "@/lib/project-store";
 import {
@@ -37,6 +38,8 @@ import {
   validateTaskInput,
 } from "@/lib/task-utils";
 import { touchProject, updateNode, findNode } from "@/lib/wbs";
+import { computeUnifiedProgressStats, syncProgressWithStatus } from "@/lib/task-progress";
+import { WBS_STATUS_OPTIONS } from "@/lib/wbs-task-meta";
 import type { ProjectTask, TaskInput } from "@/types/task";
 import type { TaskViewMode, UnifiedTask } from "@/types/unified-task";
 import type { WbsProject, WbsTaskStatus } from "@/types/wbs";
@@ -69,6 +72,12 @@ type TaskTableProps = {
   projectId: string;
   onWbsStatusChange: (nodeId: string, status: WbsTaskStatus) => void;
   onManualStatusChange: (taskId: string, status: WbsTaskStatus) => void;
+  onWbsProgressChange: (nodeId: string, progressPercent: number, status: WbsTaskStatus) => void;
+  onManualProgressChange: (
+    taskId: string,
+    progressPercent: number,
+    status: WbsTaskStatus,
+  ) => void;
   onOpenDetail: (task: UnifiedTask) => void;
   onEditManual: (taskId: string) => void;
   onDeleteManual: (task: UnifiedTask) => void;
@@ -79,6 +88,8 @@ function TaskTable({
   projectId,
   onWbsStatusChange,
   onManualStatusChange,
+  onWbsProgressChange,
+  onManualProgressChange,
   onOpenDetail,
   onEditManual,
   onDeleteManual,
@@ -103,6 +114,7 @@ function TaskTable({
             <th className="px-4 py-3">項目</th>
             <th className="hidden px-4 py-3 lg:table-cell">詳細</th>
             <th className="px-4 py-3">状態</th>
+            <th className="px-4 py-3">進捗</th>
             <th className="px-4 py-3">優先度</th>
             <th className="px-4 py-3">対応期間</th>
             <th className="px-4 py-3">対応予定</th>
@@ -158,6 +170,27 @@ function TaskTable({
                     status={task.status}
                     compact
                     onStatusChange={(status) => onManualStatusChange(task.manualTaskId!, status)}
+                  />
+                ) : null}
+              </td>
+              <td className="min-w-[120px] px-4 py-2.5">
+                {task.source === "wbs" && task.wbsNodeId ? (
+                  <TaskProgressEditor
+                    progressPercent={task.progressPercent}
+                    status={task.status}
+                    compact
+                    onChange={(progressPercent, status) =>
+                      onWbsProgressChange(task.wbsNodeId, progressPercent, status)
+                    }
+                  />
+                ) : task.manualTaskId ? (
+                  <TaskProgressEditor
+                    progressPercent={task.progressPercent}
+                    status={task.status}
+                    compact
+                    onChange={(progressPercent, status) =>
+                      onManualProgressChange(task.manualTaskId!, progressPercent, status)
+                    }
                   />
                 ) : null}
               </td>
@@ -235,6 +268,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
   const [assigneeSuggestions, setAssigneeSuggestions] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<WbsTaskStatus | "all">("all");
   const [viewMode, setViewMode] = useState<TaskViewMode>("all");
   const [formMode, setFormMode] = useState<FormMode>({ type: "closed" });
   const [formError, setFormError] = useState<string | null>(null);
@@ -285,8 +319,9 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
       filterUnifiedTasks(unifiedTasks, {
         query,
         assignee: assigneeFilter,
+        status: statusFilter,
       }),
-    [assigneeFilter, query, unifiedTasks],
+    [assigneeFilter, query, statusFilter, unifiedTasks],
   );
 
   const groupedTasks = useMemo(
@@ -297,6 +332,11 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
   const wbsNodeOptions = useMemo(
     () => (project ? listWbsNodeOptions(project.root) : []),
     [project],
+  );
+
+  const progressStats = useMemo(
+    () => computeUnifiedProgressStats(unifiedTasks),
+    [unifiedTasks],
   );
 
   const stats = useMemo(() => {
@@ -367,6 +407,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
       await updateProjectTask(projectId, taskId, {
         ...toTaskInput(task),
         status,
+        progressPercent: syncProgressWithStatus(status, task.progressPercent),
       });
       await refreshData();
     },
@@ -381,6 +422,42 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
 
       const nextRoot = updateNode(project.root, nodeId, (current) => ({
         ...current,
+        status,
+        progressPercent: syncProgressWithStatus(status, current.progressPercent),
+      }));
+      const nextProject = touchProject({ ...project, root: nextRoot });
+      await saveProject(nextProject);
+      setProject(nextProject);
+    },
+    [project],
+  );
+
+  const handleManualProgressChange = useCallback(
+    async (taskId: string, progressPercent: number, status: WbsTaskStatus) => {
+      const task = tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+
+      await updateProjectTask(projectId, taskId, {
+        ...toTaskInput(task),
+        progressPercent,
+        status,
+      });
+      await refreshData();
+    },
+    [projectId, tasks],
+  );
+
+  const handleWbsProgressChange = useCallback(
+    async (nodeId: string, progressPercent: number, status: WbsTaskStatus) => {
+      if (!project) {
+        return;
+      }
+
+      const nextRoot = updateNode(project.root, nodeId, (current) => ({
+        ...current,
+        progressPercent,
         status,
       }));
       const nextProject = touchProject({ ...project, root: nextRoot });
@@ -481,6 +558,10 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
         </div>
       </header>
 
+      <section className="mb-4">
+        <TaskProgressSummary stats={progressStats} />
+      </section>
+
       <section className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3">
         <div className="flex rounded-md border border-zinc-800 p-0.5">
           <button
@@ -508,21 +589,40 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
         </div>
 
         {viewMode === "all" && (
-          <label className="flex items-center gap-2 text-xs text-zinc-400">
-            <span>担当者</span>
-            <select
-              value={assigneeFilter}
-              onChange={(event) => setAssigneeFilter(event.target.value)}
-              className="rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600"
-            >
-              <option value="all">すべて</option>
-              {assigneeNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <span>担当者</span>
+              <select
+                value={assigneeFilter}
+                onChange={(event) => setAssigneeFilter(event.target.value)}
+                className="rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600"
+              >
+                <option value="all">すべて</option>
+                {assigneeNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <span>状態</span>
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as WbsTaskStatus | "all")
+                }
+                className="rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600"
+              >
+                <option value="all">すべて</option>
+                {WBS_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         )}
 
         <div className="ml-auto flex flex-wrap gap-3 text-xs text-zinc-500">
@@ -583,6 +683,12 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
               projectId={projectId}
               onWbsStatusChange={handleWbsStatusChange}
               onManualStatusChange={(taskId, status) => void handleManualStatusChange(taskId, status)}
+              onWbsProgressChange={(nodeId, progressPercent, status) =>
+                void handleWbsProgressChange(nodeId, progressPercent, status)
+              }
+              onManualProgressChange={(taskId, progressPercent, status) =>
+                void handleManualProgressChange(taskId, progressPercent, status)
+              }
               onOpenDetail={openDetail}
               onEditManual={(taskId) => {
                 setFormError(null);
@@ -605,6 +711,12 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
                   onWbsStatusChange={handleWbsStatusChange}
                   onManualStatusChange={(taskId, status) =>
                     void handleManualStatusChange(taskId, status)
+                  }
+                  onWbsProgressChange={(nodeId, progressPercent, status) =>
+                    void handleWbsProgressChange(nodeId, progressPercent, status)
+                  }
+                  onManualProgressChange={(taskId, progressPercent, status) =>
+                    void handleManualProgressChange(taskId, progressPercent, status)
                   }
                   onOpenDetail={openDetail}
                   onEditManual={(taskId) => {

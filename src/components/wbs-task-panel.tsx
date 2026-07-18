@@ -25,7 +25,9 @@ import {
   WBS_STATUS_OPTIONS,
 } from "@/lib/wbs-task-meta";
 import { GoogleCalendarButton } from "@/components/google-calendar-button";
+import { TaskProgressEditor } from "@/components/task-progress-bar";
 import { formatScheduledRange } from "@/lib/google-calendar";
+import { syncProgressWithStatus, computeNodeProgress } from "@/lib/task-progress";
 import { saveProject } from "@/lib/project-store";
 import type { WbsNode, WbsProject, WbsTaskLink, WbsTaskStatus } from "@/types/wbs";
 
@@ -46,6 +48,7 @@ type TaskDraft = {
   scheduledEndAt: string;
   googleCalendarEventUrl: string;
   status: WbsTaskStatus;
+  progressPercent: string;
   effort: string;
   notes: string;
   content: string;
@@ -65,6 +68,8 @@ function nodeToDraft(node: WbsNode): TaskDraft {
     scheduledEndAt: node.scheduledEndAt ?? "",
     googleCalendarEventUrl: node.googleCalendarEventUrl ?? "",
     status: normalizeWbsStatus(node.status),
+    progressPercent:
+      node.progressPercent !== undefined ? String(node.progressPercent) : "",
     effort: node.effort !== undefined ? String(node.effort) : "",
     notes: node.notes ?? "",
     content: node.content ?? "",
@@ -109,6 +114,20 @@ function normalizeLinks(links: WbsTaskLink[]): WbsTaskLink[] {
     .filter((link) => link.title || link.url);
 }
 
+function parseProgressPercent(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const parsed = Number(trimmed);
+  if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+    return undefined;
+  }
+
+  return Math.round(parsed);
+}
+
 function draftToPersistedFields(draft: TaskDraft) {
   return {
     description: draft.description.trim(),
@@ -122,6 +141,7 @@ function draftToPersistedFields(draft: TaskDraft) {
     scheduledEndAt: draft.scheduledEndAt || undefined,
     googleCalendarEventUrl: draft.googleCalendarEventUrl || undefined,
     status: draft.status,
+    progressPercent: parseProgressPercent(draft.progressPercent),
     effort: parseEffort(draft.effort),
   };
 }
@@ -145,6 +165,7 @@ function persistedFieldsEqual(
     left.scheduledEndAt === right.scheduledEndAt &&
     left.googleCalendarEventUrl === right.googleCalendarEventUrl &&
     left.status === right.status &&
+    left.progressPercent === right.progressPercent &&
     left.effort === right.effort &&
     linksEqual(left.links, right.links)
   );
@@ -433,6 +454,7 @@ export function WbsTaskPanel({
     scheduledEndAt: "",
     googleCalendarEventUrl: "",
     status: "not_started",
+    progressPercent: "",
     effort: "",
     notes: "",
     content: "",
@@ -755,9 +777,18 @@ export function WbsTaskPanel({
                   <span className="text-xs text-zinc-500">ステータス</span>
                   <select
                     value={draft.status}
-                    onChange={(event) =>
-                      updateDraft({ status: event.target.value as WbsTaskStatus })
-                    }
+                    onChange={(event) => {
+                      const nextStatus = event.target.value as WbsTaskStatus;
+                      const nextProgress = syncProgressWithStatus(
+                        nextStatus,
+                        parseProgressPercent(draft.progressPercent),
+                      );
+                      updateDraft({
+                        status: nextStatus,
+                        progressPercent:
+                          nextProgress !== undefined ? String(nextProgress) : draft.progressPercent,
+                      });
+                    }}
                     className={fieldClassName}
                   >
                     {WBS_STATUS_OPTIONS.map((option) => (
@@ -767,6 +798,26 @@ export function WbsTaskPanel({
                     ))}
                   </select>
                 </label>
+
+                <div className="flex flex-col gap-1.5 md:col-span-2">
+                  <span className="text-xs text-zinc-500">進捗率</span>
+                  <TaskProgressEditor
+                    progressPercent={
+                      node && node.children.length > 0
+                        ? computeNodeProgress(node)
+                        : parseProgressPercent(draft.progressPercent)
+                    }
+                    status={draft.status}
+                    readOnly={Boolean(node && node.children.length > 0)}
+                    isRollup={Boolean(node && node.children.length > 0)}
+                    onChange={(nextProgress, nextStatus) =>
+                      updateDraft({
+                        progressPercent: String(nextProgress),
+                        status: nextStatus,
+                      })
+                    }
+                  />
+                </div>
 
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs text-zinc-500">担当者</span>

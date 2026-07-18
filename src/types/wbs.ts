@@ -31,6 +31,8 @@ export type WbsNode = {
   /** Google カレンダー連携後のイベント URL */
   googleCalendarEventUrl?: string;
   status?: WbsTaskStatus;
+  /** 進捗率 0–100 */
+  progressPercent?: number;
   /** 作業工数（人日など） */
   effort?: number;
   /** 備考 */

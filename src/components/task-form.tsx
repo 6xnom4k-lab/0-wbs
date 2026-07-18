@@ -5,9 +5,11 @@ import { useState } from "react";
 import type { TaskInput } from "@/types/task";
 
 import { GoogleCalendarButton } from "@/components/google-calendar-button";
+import { TaskProgressEditor } from "@/components/task-progress-bar";
 import type { WbsNodeOption } from "@/lib/unified-tasks";
 import { TASK_PRIORITY_OPTIONS } from "@/lib/task-utils";
 import { WBS_STATUS_OPTIONS } from "@/lib/wbs-task-meta";
+import { syncProgressWithStatus } from "@/lib/task-progress";
 
 type TaskFormProps = {
   initialValues: TaskInput;
@@ -36,6 +38,10 @@ export function TaskForm({
   const [scheduledAt, setScheduledAt] = useState(initialValues.scheduledAt);
   const [scheduledEndAt, setScheduledEndAt] = useState(initialValues.scheduledEndAt);
   const [wbsNodeId, setWbsNodeId] = useState(initialValues.wbsNodeId);
+  const [status, setStatus] = useState(initialValues.status);
+  const [progressPercent, setProgressPercent] = useState<number | undefined>(
+    initialValues.progressPercent,
+  );
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -49,7 +55,8 @@ export function TaskForm({
       content: initialValues.content,
       assignee: String(formData.get("assignee") ?? ""),
       wbsNodeId: String(formData.get("wbsNodeId") ?? ""),
-      status: String(formData.get("status") ?? "not_started") as TaskInput["status"],
+      status,
+      progressPercent,
       priority: String(formData.get("priority") ?? "medium") as TaskInput["priority"],
       startDate: String(formData.get("startDate") ?? ""),
       endDate: String(formData.get("endDate") ?? ""),
@@ -100,8 +107,12 @@ export function TaskForm({
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium text-zinc-300">状態</span>
         <select
-          name="status"
-          defaultValue={initialValues.status}
+          value={status}
+          onChange={(event) => {
+            const nextStatus = event.target.value as TaskInput["status"];
+            setStatus(nextStatus);
+            setProgressPercent(syncProgressWithStatus(nextStatus, progressPercent));
+          }}
           className={inputClassName}
         >
           {WBS_STATUS_OPTIONS.map((option) => (
@@ -111,6 +122,18 @@ export function TaskForm({
           ))}
         </select>
       </label>
+
+      <div className="flex flex-col gap-2 md:col-span-2">
+        <span className="text-sm font-medium text-zinc-300">進捗率</span>
+        <TaskProgressEditor
+          progressPercent={progressPercent}
+          status={status}
+          onChange={(nextProgress, nextStatus) => {
+            setProgressPercent(nextProgress);
+            setStatus(nextStatus);
+          }}
+        />
+      </div>
 
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium text-zinc-300">大項目</span>

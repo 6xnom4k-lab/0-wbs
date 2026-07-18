@@ -1,9 +1,10 @@
 import { formatDateRange, collectWbsScheduleDates, parseISODate } from "@/lib/wbs-task-meta";
+import { resolveProgressPercent } from "@/lib/task-progress";
 import type { WbsNode, WbsTaskStatus } from "@/types/wbs";
 
 export const GANTT_DAY_COLUMN_WIDTH = 36;
 export const GANTT_HEADER_HEIGHT = 54;
-export const GANTT_ROW_HEIGHT = 40;
+export const GANTT_ROW_HEIGHT = 56;
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
@@ -94,17 +95,11 @@ function buildMonthSpans(days: GanttDayColumn[]): GanttMonthSpan[] {
   return spans;
 }
 
-export function getProgressPercent(status: WbsTaskStatus | undefined): number {
-  switch (status) {
-    case "done":
-      return 100;
-    case "in_progress":
-      return 55;
-    case "on_hold":
-      return 25;
-    default:
-      return 0;
-  }
+export function getProgressPercent(
+  status: WbsTaskStatus | undefined,
+  progressPercent?: number,
+): number {
+  return resolveProgressPercent(progressPercent, status);
 }
 
 export function getDescendantScheduleRange(node: WbsNode): {
@@ -209,6 +204,7 @@ export function getGanttBarRender(
   endDate: string | undefined,
   status: WbsTaskStatus | undefined,
   timeline: GanttTimeline,
+  progressPercent?: number,
 ): GanttBarRender {
   const parsedStart = parseISODate(startDate);
   const parsedEnd = parseISODate(endDate);
@@ -226,7 +222,7 @@ export function getGanttBarRender(
     return {
       leftPx: 0,
       widthPx: 0,
-      progressPercent: getProgressPercent(status),
+      progressPercent: getProgressPercent(status, progressPercent),
       hasSchedule: false,
       title: "",
     };
@@ -245,7 +241,7 @@ export function getGanttBarRender(
     return {
       leftPx: 0,
       widthPx: 0,
-      progressPercent: getProgressPercent(status),
+      progressPercent: getProgressPercent(status, progressPercent),
       hasSchedule: true,
       title,
     };

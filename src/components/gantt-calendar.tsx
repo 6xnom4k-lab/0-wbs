@@ -160,7 +160,7 @@ export function GanttCalendarRow({
       }`}
       style={{
         width: timeline.chartWidthPx,
-        height: GANTT_ROW_HEIGHT,
+        minHeight: GANTT_ROW_HEIGHT,
         backgroundColor: row.isRoot ? "rgb(9 9 11 / 0.5)" : "rgb(9 9 11 / 0.35)",
       }}
       onDragOver={onDragOver}

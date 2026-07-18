@@ -4,11 +4,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MeetingNotesImportDialog } from "@/components/meeting-notes-import-dialog";
+import { TaskProgressSummary } from "@/components/task-progress-bar";
 import { WbsGanttBoard } from "@/components/wbs-gantt-board";
 import { WbsTaskPanel } from "@/components/wbs-task-panel";
 import { getProject, saveProject } from "@/lib/project-store";
 import { listProjectAssigneeNames, normalizeProjectAssignees } from "@/lib/project-assignees";
 import { countNodes, findNode, normalizeProjectRoot, touchProject } from "@/lib/wbs";
+import { computeWbsBoardProgressStats } from "@/lib/task-progress";
 import type { WbsProject } from "@/types/wbs";
 
 type WbsEditorProps = {
@@ -81,6 +83,14 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
     }
 
     return countNodes(project.root);
+  }, [project]);
+
+  const progressStats = useMemo(() => {
+    if (!project) {
+      return null;
+    }
+
+    return computeWbsBoardProgressStats(project.root);
   }, [project]);
 
   const assigneeOptions = useMemo(
@@ -197,6 +207,10 @@ export function WbsEditor({ projectId }: WbsEditorProps) {
               </div>
             </div>
           </div>
+
+          {progressStats && (
+            <TaskProgressSummary stats={progressStats} />
+          )}
 
           {importFeedback && (
             <p className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 px-4 py-2 text-sm text-emerald-200">

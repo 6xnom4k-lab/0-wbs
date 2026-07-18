@@ -23,6 +23,7 @@ create table if not exists public.wbs_project_tasks (
   assignee text not null default '',
   wbs_node_id text not null default '',
   status text not null default 'not_started' check (status in ('not_started', 'in_progress', 'done', 'on_hold')),
+  progress_percent integer check (progress_percent >= 0 and progress_percent <= 100),
   priority text not null default 'medium' check (priority in ('high', 'medium', 'low')),
   start_date text not null default '',
   end_date text not null default '',

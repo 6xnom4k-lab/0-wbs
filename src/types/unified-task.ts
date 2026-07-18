@@ -15,6 +15,7 @@ export type UnifiedTask = {
   detail: string;
   assignee: string;
   status: WbsTaskStatus;
+  progressPercent: number;
   priority: TaskPriority;
   startDate: string;
   endDate: string;

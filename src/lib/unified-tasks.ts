@@ -1,8 +1,9 @@
 import { findNodePath, flattenWbsBoard } from "@/lib/wbs";
+import { resolveProgressPercent } from "@/lib/task-progress";
 import { normalizeWbsStatus } from "@/lib/wbs-task-meta";
 import type { ProjectTask } from "@/types/task";
 import type { UnifiedTask } from "@/types/unified-task";
-import type { WbsNode, WbsProject } from "@/types/wbs";
+import type { WbsNode, WbsProject, WbsTaskStatus } from "@/types/wbs";
 
 export type WbsNodeOption = {
   id: string;
@@ -51,6 +52,7 @@ export function buildUnifiedTasks(
     detail: row.description ?? "",
     assignee: row.assignee ?? "",
     status: normalizeWbsStatus(row.status),
+    progressPercent: resolveProgressPercent(row.progressPercent, row.status),
     priority: "medium" as const,
     startDate: row.startDate ?? "",
     endDate: row.endDate ?? "",
@@ -73,6 +75,7 @@ export function buildUnifiedTasks(
     detail: task.detail,
     assignee: task.assignee,
     status: task.status,
+    progressPercent: resolveProgressPercent(task.progressPercent, task.status),
     priority: task.priority,
     startDate: task.startDate,
     endDate: task.endDate,
@@ -142,7 +145,7 @@ export function matchesUnifiedTaskQuery(task: UnifiedTask, query: string): boole
 
 export function filterUnifiedTasks(
   tasks: UnifiedTask[],
-  options: { query?: string; assignee?: string },
+  options: { query?: string; assignee?: string; status?: WbsTaskStatus | "all" },
 ): UnifiedTask[] {
   return tasks.filter((task) => {
     if (options.assignee && options.assignee !== "all") {
@@ -150,6 +153,10 @@ export function filterUnifiedTasks(
       if (taskAssignee !== options.assignee) {
         return false;
       }
+    }
+
+    if (options.status && options.status !== "all" && task.status !== options.status) {
+      return false;
     }
 
     return matchesUnifiedTaskQuery(task, options.query ?? "");

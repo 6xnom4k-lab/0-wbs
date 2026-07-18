@@ -6,11 +6,13 @@ import { createPortal } from "react-dom";
 import { ExpandFullscreenIcon, ShrinkPanelIcon } from "@/components/icons";
 import { GoogleCalendarButton } from "@/components/google-calendar-button";
 import { WbsStatusBadge } from "@/components/wbs-status-badge";
+import { TaskProgressEditor } from "@/components/task-progress-bar";
 import { formatWbsNodeLabel } from "@/lib/unified-tasks";
 import { updateProjectTask } from "@/lib/task-store";
 import { TASK_PRIORITY_OPTIONS } from "@/lib/task-utils";
 import { formatScheduledRange } from "@/lib/google-calendar";
 import { WBS_STATUS_OPTIONS } from "@/lib/wbs-task-meta";
+import { syncProgressWithStatus } from "@/lib/task-progress";
 import type { ProjectTask, TaskInput } from "@/types/task";
 import type { WbsProject } from "@/types/wbs";
 
@@ -39,6 +41,7 @@ function taskToDraft(task: ProjectTask): TaskDraft {
     assignee: task.assignee,
     wbsNodeId: task.wbsNodeId,
     status: task.status,
+    progressPercent: task.progressPercent,
     priority: task.priority,
     startDate: task.startDate,
     endDate: task.endDate,
@@ -58,6 +61,7 @@ function draftToInput(draft: TaskDraft): TaskInput {
     assignee: draft.assignee.trim(),
     wbsNodeId: draft.wbsNodeId.trim(),
     status: draft.status,
+    progressPercent: draft.progressPercent,
     priority: draft.priority,
     startDate: draft.startDate,
     endDate: draft.endDate,
@@ -305,9 +309,14 @@ export function ProjectTaskPanel({
                   <span className="text-xs text-zinc-500">状態</span>
                   <select
                     value={draft.status}
-                    onChange={(event) =>
-                      updateDraft({ status: event.target.value as TaskInput["status"] })
-                    }
+                    onChange={(event) => {
+                      const nextStatus = event.target.value as TaskInput["status"];
+                      const nextProgress = syncProgressWithStatus(nextStatus, draft.progressPercent);
+                      updateDraft({
+                        status: nextStatus,
+                        progressPercent: nextProgress,
+                      });
+                    }}
                     className={fieldClassName}
                   >
                     {WBS_STATUS_OPTIONS.map((option) => (
@@ -317,6 +326,20 @@ export function ProjectTaskPanel({
                     ))}
                   </select>
                 </label>
+
+                <div className="flex flex-col gap-1.5 md:col-span-2">
+                  <span className="text-xs text-zinc-500">進捗率</span>
+                  <TaskProgressEditor
+                    progressPercent={draft.progressPercent}
+                    status={draft.status}
+                    onChange={(nextProgress, nextStatus) =>
+                      updateDraft({
+                        progressPercent: nextProgress,
+                        status: nextStatus,
+                      })
+                    }
+                  />
+                </div>
 
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs text-zinc-500">対応開始日</span>

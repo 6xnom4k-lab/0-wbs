@@ -18,6 +18,7 @@ type TaskRow = {
   assignee: string;
   wbs_node_id: string;
   status: ProjectTask["status"];
+  progress_percent?: number;
   priority: ProjectTask["priority"];
   start_date: string;
   end_date: string;
@@ -57,6 +58,7 @@ function normalizeTask(task: ProjectTask): ProjectTask {
     notes: task.notes ?? "",
     content: task.content ?? "",
     status: normalizeWbsStatus(task.status),
+    progressPercent: task.progressPercent,
     scheduledAt: task.scheduledAt ?? "",
     scheduledEndAt: task.scheduledEndAt ?? "",
     googleCalendarEventUrl: task.googleCalendarEventUrl ?? "",
@@ -75,6 +77,7 @@ function rowToTask(row: TaskRow): ProjectTask {
     assignee: row.assignee ?? "",
     wbsNodeId: row.wbs_node_id ?? "",
     status: row.status ?? "not_started",
+    progressPercent: row.progress_percent,
     priority: row.priority,
     startDate: row.start_date,
     endDate: row.end_date,
@@ -98,6 +101,7 @@ function taskToRow(task: ProjectTask): TaskRow {
     assignee: task.assignee,
     wbs_node_id: task.wbsNodeId,
     status: task.status,
+    progress_percent: task.progressPercent,
     priority: task.priority,
     start_date: task.startDate,
     end_date: task.endDate,
@@ -109,6 +113,39 @@ function taskToRow(task: ProjectTask): TaskRow {
   };
 }
 
+function isProgressColumnError(message: string): boolean {
+  return /progress_percent|column|schema cache|PGRST204/i.test(message);
+}
+
+async function upsertTaskRow(task: ProjectTask): Promise<void> {
+  const supabase = createSupabaseBrowserClient();
+  const row = taskToRow(task);
+  let { error } = await supabase.from("wbs_project_tasks").upsert(row);
+
+  if (error && isProgressColumnError(error.message)) {
+    const { progress_percent: _removed, ...legacyRow } = row;
+    ({ error } = await supabase.from("wbs_project_tasks").upsert(legacyRow));
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+async function insertTaskRow(task: ProjectTask): Promise<void> {
+  const supabase = createSupabaseBrowserClient();
+  const row = taskToRow(task);
+  let { error } = await supabase.from("wbs_project_tasks").insert(row);
+
+  if (error && isProgressColumnError(error.message)) {
+    const { progress_percent: _removed, ...legacyRow } = row;
+    ({ error } = await supabase.from("wbs_project_tasks").insert(legacyRow));
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
 async function listTasksFromSupabase(projectId: string): Promise<ProjectTask[]> {
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase
@@ -192,6 +229,7 @@ export async function createProjectTask(
     assignee: input.assignee.trim(),
     wbsNodeId: input.wbsNodeId.trim(),
     status: normalizeWbsStatus(input.status),
+    progressPercent: input.progressPercent,
     priority: input.priority,
     startDate: input.startDate,
     endDate: input.endDate,
@@ -207,12 +245,7 @@ export async function createProjectTask(
     return task;
   }
 
-  const supabase = createSupabaseBrowserClient();
-  const { error } = await supabase.from("wbs_project_tasks").insert(taskToRow(task));
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  await insertTaskRow(task);
 
   return task;
 }
@@ -242,6 +275,7 @@ export async function updateProjectTask(
       assignee: input.assignee.trim(),
       wbsNodeId: input.wbsNodeId.trim(),
       status: normalizeWbsStatus(input.status),
+      progressPercent: input.progressPercent,
       priority: input.priority,
       startDate: input.startDate,
       endDate: input.endDate,
@@ -272,6 +306,7 @@ export async function updateProjectTask(
     assignee: input.assignee.trim(),
     wbsNodeId: input.wbsNodeId.trim(),
     status: normalizeWbsStatus(input.status),
+    progressPercent: input.progressPercent,
     priority: input.priority,
     startDate: input.startDate,
     endDate: input.endDate,
@@ -281,12 +316,7 @@ export async function updateProjectTask(
     updatedAt: new Date().toISOString(),
   };
 
-  const supabase = createSupabaseBrowserClient();
-  const { error } = await supabase.from("wbs_project_tasks").upsert(taskToRow(updated));
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  await upsertTaskRow(updated);
 
   return updated;
 }
