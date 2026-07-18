@@ -4,7 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type DragEvent } from "
 
 import { GanttCalendarHeader, GanttCalendarRow } from "@/components/gantt-calendar";
 import { IconButton } from "@/components/icon-button";
-import { WbsStatusBadge } from "@/components/wbs-status-badge";
+import { WbsStatusQuickSelect } from "@/components/wbs-status-badge";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -40,7 +40,7 @@ import {
   updateNode,
   type WbsFlatRow,
 } from "@/lib/wbs";
-import type { WbsNode } from "@/types/wbs";
+import type { WbsNode, WbsTaskStatus } from "@/types/wbs";
 
 type WbsGanttBoardProps = {
   root: WbsNode;
@@ -519,6 +519,15 @@ function WbsRowLeft({
     onChange(deleteBoardNode(root, row.id));
   };
 
+  const handleStatusChange = (nextStatus: WbsTaskStatus) => {
+    onChange(
+      updateNode(root, row.id, (current) => ({
+        ...current,
+        status: nextStatus,
+      })),
+    );
+  };
+
   return (
     <Fragment>
       <div
@@ -578,7 +587,11 @@ function WbsRowLeft({
         <WbsMetaCell value={formatTableDate(row.startDate)} className="tabular-nums" />
         <WbsMetaCell value={formatTableDate(row.endDate)} className="tabular-nums" />
         <div className="px-1">
-          <WbsStatusBadge status={row.status} compact />
+          <WbsStatusQuickSelect
+            status={row.status}
+            compact
+            onStatusChange={handleStatusChange}
+          />
         </div>
         <span className="block px-1 text-center text-[10px] tabular-nums text-zinc-400">
           {formatEffort(row.effort) || "—"}

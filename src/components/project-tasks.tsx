@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { IconButton } from "@/components/icon-button";
 import { GoogleCalendarButton } from "@/components/google-calendar-button";
-import { DeleteIcon, EditIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import { DeleteIcon, EditIcon, ExternalLinkIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { TaskForm } from "@/components/task-form";
-import { getProject } from "@/lib/project-store";
+import { WbsStatusQuickSelect } from "@/components/wbs-status-badge";
+import { listAccounts } from "@/lib/account-store";
+import { getProject, saveProject } from "@/lib/project-store";
 import {
   createProjectTask,
   deleteProjectTask,
@@ -16,16 +19,25 @@ import {
   updateProjectTask,
 } from "@/lib/task-store";
 import {
+  buildUnifiedTasks,
+  filterUnifiedTasks,
+  groupTasksByAssignee,
+  listAssigneeNames,
+  listWbsNodeOptions,
+} from "@/lib/unified-tasks";
+import {
   emptyTaskInput,
   formatTaskPeriod,
-  formatTaskScheduledAt,
+  formatUnifiedTaskScheduledAt,
   getTaskPriorityClassName,
   getTaskPriorityLabel,
-  matchesTaskQuery,
   toTaskInput,
   validateTaskInput,
 } from "@/lib/task-utils";
+import { touchProject, updateNode } from "@/lib/wbs";
 import type { ProjectTask, TaskInput } from "@/types/task";
+import type { TaskViewMode, UnifiedTask } from "@/types/unified-task";
+import type { WbsProject, WbsTaskStatus } from "@/types/wbs";
 
 type ProjectTasksProps = {
   projectId: string;
@@ -36,46 +48,250 @@ type FormMode =
   | { type: "create" }
   | { type: "edit"; taskId: string };
 
+function TaskSourceBadge({ source }: { source: UnifiedTask["source"] }) {
+  return (
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
+        source === "wbs"
+          ? "bg-sky-950/50 text-sky-300 ring-sky-900/60"
+          : "bg-violet-950/50 text-violet-300 ring-violet-900/60"
+      }`}
+    >
+      {source === "wbs" ? "WBS" : "追加"}
+    </span>
+  );
+}
+
+type TaskTableProps = {
+  tasks: UnifiedTask[];
+  projectId: string;
+  onWbsStatusChange: (nodeId: string, status: WbsTaskStatus) => void;
+  onManualStatusChange: (taskId: string, status: WbsTaskStatus) => void;
+  onEditManual: (taskId: string) => void;
+  onDeleteManual: (task: UnifiedTask) => void;
+};
+
+function TaskTable({
+  tasks,
+  projectId,
+  onWbsStatusChange,
+  onManualStatusChange,
+  onEditManual,
+  onDeleteManual,
+}: TaskTableProps) {
+  if (tasks.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center text-sm text-zinc-500">
+        表示するタスクがありません。
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full border-collapse text-sm">
+        <thead className="bg-black/40 text-left text-xs font-medium uppercase tracking-wide text-zinc-500">
+          <tr>
+            <th className="px-4 py-3">種別</th>
+            <th className="px-4 py-3">WBS 割当</th>
+            <th className="px-4 py-3">担当</th>
+            <th className="px-4 py-3">大項目</th>
+            <th className="px-4 py-3">項目</th>
+            <th className="hidden px-4 py-3 lg:table-cell">詳細</th>
+            <th className="px-4 py-3">状態</th>
+            <th className="px-4 py-3">優先度</th>
+            <th className="px-4 py-3">対応期間</th>
+            <th className="px-4 py-3">対応予定</th>
+            <th className="px-4 py-3 text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-800">
+          {tasks.map((task) => (
+            <tr key={task.key} className="transition hover:bg-zinc-900/50">
+              <td className="whitespace-nowrap px-4 py-2.5">
+                <TaskSourceBadge source={task.source} />
+              </td>
+              <td className="max-w-[14rem] px-4 py-2.5 text-zinc-400">
+                {task.wbsLabel ? (
+                  <span className="line-clamp-2 text-xs leading-5" title={task.wbsLabel}>
+                    {task.wbsLabel}
+                  </span>
+                ) : (
+                  <span className="text-zinc-600">未割当</span>
+                )}
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-zinc-300">
+                {task.assignee || "—"}
+              </td>
+              <td className="max-w-[10rem] truncate px-4 py-2.5 text-zinc-400">
+                {task.category || "—"}
+              </td>
+              <td className="max-w-[12rem] truncate px-4 py-2.5 font-medium text-zinc-100">
+                {task.title}
+              </td>
+              <td
+                className="hidden max-w-[18rem] truncate px-4 py-2.5 text-zinc-500 lg:table-cell"
+                title={task.detail}
+              >
+                {task.detail || "—"}
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5">
+                {task.source === "wbs" && task.wbsNodeId ? (
+                  <WbsStatusQuickSelect
+                    status={task.status}
+                    compact
+                    onStatusChange={(status) => onWbsStatusChange(task.wbsNodeId, status)}
+                  />
+                ) : task.manualTaskId ? (
+                  <WbsStatusQuickSelect
+                    status={task.status}
+                    compact
+                    onStatusChange={(status) => onManualStatusChange(task.manualTaskId!, status)}
+                  />
+                ) : null}
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5">
+                {task.source === "manual" ? (
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs ring-1 ring-inset ${getTaskPriorityClassName(task.priority)}`}
+                  >
+                    {getTaskPriorityLabel(task.priority)}
+                  </span>
+                ) : (
+                  <span className="text-xs text-zinc-600">—</span>
+                )}
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
+                {formatTaskPeriod(task.startDate, task.endDate)}
+              </td>
+              <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
+                {formatUnifiedTaskScheduledAt(task)}
+              </td>
+              <td className="px-4 py-2.5">
+                <div className="flex items-center justify-end gap-1">
+                  {task.source === "manual" && task.scheduledAt && (
+                    <GoogleCalendarButton
+                      title={task.title}
+                      startAt={task.scheduledAt}
+                      endAt={task.scheduledEndAt || undefined}
+                      description={task.detail}
+                      label="カレンダー"
+                      className="px-2 py-1 text-xs"
+                    />
+                  )}
+                  {task.source === "wbs" && task.wbsNodeId ? (
+                    <Link
+                      href={`/projects/${projectId}/wbs?task=${task.wbsNodeId}`}
+                      className="inline-flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 transition hover:bg-zinc-900"
+                    >
+                      <ExternalLinkIcon className="h-3.5 w-3.5" />
+                      WBS
+                    </Link>
+                  ) : (
+                    <>
+                      <IconButton
+                        label={`${task.title} を編集`}
+                        tone="primary"
+                        onClick={() => onEditManual(task.manualTaskId!)}
+                      >
+                        <EditIcon className="h-4 w-4" />
+                      </IconButton>
+                      <IconButton
+                        label={`${task.title} を削除`}
+                        tone="danger"
+                        onClick={() => onDeleteManual(task)}
+                      >
+                        <DeleteIcon className="h-4 w-4" />
+                      </IconButton>
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function ProjectTasks({ projectId }: ProjectTasksProps) {
   const router = useRouter();
-  const [projectName, setProjectName] = useState<string | null>(null);
+  const [project, setProject] = useState<WbsProject | null>(null);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
+  const [assigneeSuggestions, setAssigneeSuggestions] = useState<string[]>([]);
   const [query, setQuery] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<TaskViewMode>("all");
   const [formMode, setFormMode] = useState<FormMode>({ type: "closed" });
   const [formError, setFormError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   const [categories, setCategories] = useState<string[]>([]);
 
-  const refreshTasks = async () => {
-    const [nextTasks, nextCategories] = await Promise.all([
+  const refreshData = async () => {
+    const [loadedProject, nextTasks, nextCategories, accounts] = await Promise.all([
+      getProject(projectId),
       listProjectTasks(projectId),
       listProjectTaskCategories(projectId),
+      listAccounts(),
     ]);
+
+    if (!loadedProject) {
+      router.replace("/");
+      return false;
+    }
+
+    setProject(loadedProject);
     setTasks(nextTasks);
     setCategories(nextCategories);
+    setAssigneeSuggestions(accounts.map((account) => account.displayName).filter(Boolean));
+    return true;
   };
 
   useEffect(() => {
     void (async () => {
-      const project = await getProject(projectId);
-      if (!project) {
-        router.replace("/");
-        return;
+      const ok = await refreshData();
+      if (ok) {
+        setIsReady(true);
       }
-
-      setProjectName(project.name);
-      await refreshTasks();
-      setIsReady(true);
     })();
   }, [projectId, router]);
 
-  const categorySuggestions = categories;
+  const unifiedTasks = useMemo(() => {
+    if (!project) {
+      return [];
+    }
+
+    return buildUnifiedTasks(project, tasks);
+  }, [project, tasks]);
+
+  const assigneeNames = useMemo(() => listAssigneeNames(unifiedTasks), [unifiedTasks]);
 
   const filteredTasks = useMemo(
-    () => tasks.filter((task) => matchesTaskQuery(task, query)),
-    [tasks, query],
+    () =>
+      filterUnifiedTasks(unifiedTasks, {
+        query,
+        assignee: assigneeFilter,
+      }),
+    [assigneeFilter, query, unifiedTasks],
   );
+
+  const groupedTasks = useMemo(
+    () => groupTasksByAssignee(filteredTasks),
+    [filteredTasks],
+  );
+
+  const wbsNodeOptions = useMemo(
+    () => (project ? listWbsNodeOptions(project.root) : []),
+    [project],
+  );
+
+  const stats = useMemo(() => {
+    const wbsCount = unifiedTasks.filter((task) => task.source === "wbs").length;
+    const manualCount = unifiedTasks.filter((task) => task.source === "manual").length;
+    return { wbsCount, manualCount, total: unifiedTasks.length };
+  }, [unifiedTasks]);
 
   const editingTask = useMemo(() => {
     if (formMode.type !== "edit") {
@@ -91,7 +307,7 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
     }
 
     return emptyTaskInput();
-  }, [formMode.type, editingTask]);
+  }, [editingTask, formMode.type]);
 
   const handleSubmit = async (input: TaskInput) => {
     const error = validateTaskInput(input);
@@ -108,24 +324,61 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
 
     setFormError(null);
     setFormMode({ type: "closed" });
-    await refreshTasks();
+    await refreshData();
   };
 
-  const handleDelete = async (task: ProjectTask) => {
+  const handleDeleteManual = async (task: UnifiedTask) => {
+    if (!task.manualTaskId) {
+      return;
+    }
+
     const label = task.category ? `${task.category} / ${task.title}` : task.title;
     const confirmed = window.confirm(`「${label}」を削除しますか？`);
     if (!confirmed) {
       return;
     }
 
-    await deleteProjectTask(projectId, task.id);
-    if (formMode.type === "edit" && formMode.taskId === task.id) {
+    await deleteProjectTask(projectId, task.manualTaskId);
+    if (formMode.type === "edit" && formMode.taskId === task.manualTaskId) {
       setFormMode({ type: "closed" });
     }
-    await refreshTasks();
+    await refreshData();
   };
 
-  if (!projectName) {
+  const handleManualStatusChange = useCallback(
+    async (taskId: string, status: WbsTaskStatus) => {
+      const task = tasks.find((item) => item.id === taskId);
+      if (!task) {
+        return;
+      }
+
+      await updateProjectTask(projectId, taskId, {
+        ...toTaskInput(task),
+        status,
+      });
+      await refreshData();
+    },
+    [projectId, tasks],
+  );
+
+  const handleWbsStatusChange = useCallback(
+    async (nodeId: string, status: WbsTaskStatus) => {
+      if (!project) {
+        return;
+      }
+
+      const nextRoot = updateNode(project.root, nodeId, (current) => ({
+        ...current,
+        status,
+      }));
+      const nextProject = touchProject({ ...project, root: nextRoot });
+      await saveProject(nextProject);
+      setProject(nextProject);
+    },
+    [project],
+  );
+
+  if (!project) {
     return (
       <div className="px-6 py-10">
         <p className="text-sm text-zinc-500">読み込み中...</p>
@@ -140,7 +393,8 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
           <p className="text-sm text-zinc-500">Project</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">タスク管理</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-            「{projectName}」の大項目・項目・詳細・優先度・対応期間を管理します。
+            WBS の作業項目と追加タスクをまとめて管理します。担当者別の一覧表示や WBS
+            への割り当てができます。
           </p>
         </div>
 
@@ -163,24 +417,78 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
             className="inline-flex items-center gap-2 rounded-md border border-zinc-700 bg-white px-3 py-2 text-sm font-medium text-black transition hover:bg-zinc-200"
           >
             <PlusIcon />
-            新規タスク
+            タスクを追加
           </button>
         </div>
       </header>
 
+      <section className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3">
+        <div className="flex rounded-md border border-zinc-800 p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("all")}
+            className={`rounded px-3 py-1.5 text-xs font-medium transition ${
+              viewMode === "all"
+                ? "bg-zinc-800 text-white"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            全体
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("byAssignee")}
+            className={`rounded px-3 py-1.5 text-xs font-medium transition ${
+              viewMode === "byAssignee"
+                ? "bg-zinc-800 text-white"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            担当者別
+          </button>
+        </div>
+
+        {viewMode === "all" && (
+          <label className="flex items-center gap-2 text-xs text-zinc-400">
+            <span>担当者</span>
+            <select
+              value={assigneeFilter}
+              onChange={(event) => setAssigneeFilter(event.target.value)}
+              className="rounded-md border border-zinc-800 bg-black px-2 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-600"
+            >
+              <option value="all">すべて</option>
+              {assigneeNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div className="ml-auto flex flex-wrap gap-3 text-xs text-zinc-500">
+          <span>合計 {stats.total} 件</span>
+          <span>WBS {stats.wbsCount}</span>
+          <span>追加 {stats.manualCount}</span>
+        </div>
+      </section>
+
       {formMode.type !== "closed" && (
         <section className="mb-6 rounded-lg border border-zinc-800 bg-zinc-950 p-4">
           <h2 className="text-sm font-medium text-white">
-            {formMode.type === "edit" ? "タスクを編集" : "タスクを追加"}
+            {formMode.type === "edit" ? "追加タスクを編集" : "追加タスクを作成"}
           </h2>
-          {formError && (
-            <p className="mt-2 text-sm text-red-400">{formError}</p>
-          )}
+          <p className="mt-1 text-xs text-zinc-500">
+            WBS 項目そのものは WBS 画面で編集します。ここでは WBS に紐づく追加タスクを管理します。
+          </p>
+          {formError && <p className="mt-2 text-sm text-red-400">{formError}</p>}
           <div className="mt-4">
             <TaskForm
               key={formMode.type === "edit" ? formMode.taskId : "create"}
               initialValues={formInitialValues}
-              categorySuggestions={categorySuggestions}
+              categorySuggestions={categories}
+              assigneeSuggestions={assigneeSuggestions}
+              wbsNodeOptions={wbsNodeOptions}
               submitLabel={formMode.type === "edit" ? "更新" : "追加"}
               onSubmit={handleSubmit}
               onCancel={() => {
@@ -195,99 +503,57 @@ export function ProjectTasks({ projectId }: ProjectTasksProps) {
       <section className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
         {!isReady ? (
           <div className="px-4 py-10 text-center text-sm text-zinc-500">読み込み中...</div>
-        ) : tasks.length === 0 ? (
+        ) : unifiedTasks.length === 0 ? (
           <div className="px-4 py-16 text-center">
-            <p className="text-sm text-zinc-400">まだタスクがありません。</p>
-            <button
-              type="button"
-              onClick={() => setFormMode({ type: "create" })}
+            <p className="text-sm text-zinc-400">WBS に作業項目がまだありません。</p>
+            <Link
+              href={`/projects/${projectId}/wbs`}
               className="mt-4 inline-flex items-center gap-2 rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300 transition hover:bg-zinc-900"
             >
-              <PlusIcon />
-              最初のタスクを追加
-            </button>
+              WBS を編集
+            </Link>
           </div>
-        ) : filteredTasks.length === 0 ? (
-          <div className="px-4 py-16 text-center text-sm text-zinc-500">
-            検索条件に一致するタスクがありません。
-          </div>
+        ) : viewMode === "all" ? (
+          filteredTasks.length === 0 ? (
+            <div className="px-4 py-16 text-center text-sm text-zinc-500">
+              検索条件に一致するタスクがありません。
+            </div>
+          ) : (
+            <TaskTable
+              tasks={filteredTasks}
+              projectId={projectId}
+              onWbsStatusChange={handleWbsStatusChange}
+              onManualStatusChange={(taskId, status) => void handleManualStatusChange(taskId, status)}
+              onEditManual={(taskId) => {
+                setFormError(null);
+                setFormMode({ type: "edit", taskId });
+              }}
+              onDeleteManual={(task) => void handleDeleteManual(task)}
+            />
+          )
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-collapse text-sm">
-              <thead className="bg-black/40 text-left text-xs font-medium uppercase tracking-wide text-zinc-500">
-                <tr>
-                  <th className="px-4 py-3">大項目</th>
-                  <th className="px-4 py-3">項目</th>
-                  <th className="hidden px-4 py-3 lg:table-cell">詳細</th>
-                  <th className="px-4 py-3">優先度</th>
-                  <th className="px-4 py-3">対応期間</th>
-                  <th className="px-4 py-3">対応予定</th>
-                  <th className="px-4 py-3 text-right">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800">
-                {filteredTasks.map((task) => (
-                  <tr key={task.id} className="transition hover:bg-zinc-900/50">
-                    <td className="max-w-[10rem] truncate px-4 py-2.5 text-zinc-400">
-                      {task.category || "—"}
-                    </td>
-                    <td className="max-w-[12rem] truncate px-4 py-2.5 font-medium text-zinc-100">
-                      {task.title}
-                    </td>
-                    <td
-                      className="hidden max-w-[18rem] truncate px-4 py-2.5 text-zinc-500 lg:table-cell"
-                      title={task.detail}
-                    >
-                      {task.detail || "—"}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs ring-1 ring-inset ${getTaskPriorityClassName(task.priority)}`}
-                      >
-                        {getTaskPriorityLabel(task.priority)}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
-                      {formatTaskPeriod(task.startDate, task.endDate)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-zinc-500">
-                      {formatTaskScheduledAt(task)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-1">
-                        {task.scheduledAt && (
-                          <GoogleCalendarButton
-                            title={task.title}
-                            startAt={task.scheduledAt}
-                            endAt={task.scheduledEndAt || undefined}
-                            description={task.detail}
-                            label="カレンダー"
-                            className="px-2 py-1 text-xs"
-                          />
-                        )}
-                        <IconButton
-                          label={`${task.title} を編集`}
-                          tone="primary"
-                          onClick={() => {
-                            setFormError(null);
-                            setFormMode({ type: "edit", taskId: task.id });
-                          }}
-                        >
-                          <EditIcon className="h-4 w-4" />
-                        </IconButton>
-                        <IconButton
-                          label={`${task.title} を削除`}
-                          tone="danger"
-                          onClick={() => handleDelete(task)}
-                        >
-                          <DeleteIcon className="h-4 w-4" />
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="divide-y divide-zinc-800">
+            {groupedTasks.map((group) => (
+              <section key={group.assignee}>
+                <header className="flex items-center justify-between bg-black/30 px-4 py-3">
+                  <h2 className="text-sm font-medium text-white">{group.assignee}</h2>
+                  <span className="text-xs text-zinc-500">{group.tasks.length} 件</span>
+                </header>
+                <TaskTable
+                  tasks={group.tasks}
+                  projectId={projectId}
+                  onWbsStatusChange={handleWbsStatusChange}
+                  onManualStatusChange={(taskId, status) =>
+                    void handleManualStatusChange(taskId, status)
+                  }
+                  onEditManual={(taskId) => {
+                    setFormError(null);
+                    setFormMode({ type: "edit", taskId });
+                  }}
+                  onDeleteManual={(task) => void handleDeleteManual(task)}
+                />
+              </section>
+            ))}
           </div>
         )}
       </section>

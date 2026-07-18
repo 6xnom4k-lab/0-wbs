@@ -5,11 +5,15 @@ import { useState } from "react";
 import type { TaskInput } from "@/types/task";
 
 import { GoogleCalendarButton } from "@/components/google-calendar-button";
+import type { WbsNodeOption } from "@/lib/unified-tasks";
 import { TASK_PRIORITY_OPTIONS } from "@/lib/task-utils";
+import { WBS_STATUS_OPTIONS } from "@/lib/wbs-task-meta";
 
 type TaskFormProps = {
   initialValues: TaskInput;
   categorySuggestions: string[];
+  assigneeSuggestions: string[];
+  wbsNodeOptions: WbsNodeOption[];
   submitLabel: string;
   onSubmit: (values: TaskInput) => void;
   onCancel?: () => void;
@@ -21,6 +25,8 @@ const inputClassName =
 export function TaskForm({
   initialValues,
   categorySuggestions,
+  assigneeSuggestions,
+  wbsNodeOptions,
   submitLabel,
   onSubmit,
   onCancel,
@@ -29,6 +35,7 @@ export function TaskForm({
   const [detail, setDetail] = useState(initialValues.detail);
   const [scheduledAt, setScheduledAt] = useState(initialValues.scheduledAt);
   const [scheduledEndAt, setScheduledEndAt] = useState(initialValues.scheduledEndAt);
+  const [wbsNodeId, setWbsNodeId] = useState(initialValues.wbsNodeId);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -38,6 +45,9 @@ export function TaskForm({
       category: String(formData.get("category") ?? ""),
       title: String(formData.get("title") ?? ""),
       detail: String(formData.get("detail") ?? ""),
+      assignee: String(formData.get("assignee") ?? ""),
+      wbsNodeId: String(formData.get("wbsNodeId") ?? ""),
+      status: String(formData.get("status") ?? "not_started") as TaskInput["status"],
       priority: String(formData.get("priority") ?? "medium") as TaskInput["priority"],
       startDate: String(formData.get("startDate") ?? ""),
       endDate: String(formData.get("endDate") ?? ""),
@@ -49,6 +59,57 @@ export function TaskForm({
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+      <label className="flex flex-col gap-2 md:col-span-2">
+        <span className="text-sm font-medium text-zinc-300">WBS 割り当て</span>
+        <select
+          name="wbsNodeId"
+          value={wbsNodeId}
+          onChange={(event) => setWbsNodeId(event.target.value)}
+          className={inputClassName}
+        >
+          <option value="">未割当（WBS に紐づけない）</option>
+          {wbsNodeOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-zinc-500">
+          WBS のどの作業項目に紐づくタスクかを指定できます。
+        </span>
+      </label>
+
+      <label className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-zinc-300">担当者</span>
+        <input
+          name="assignee"
+          list="task-assignee-suggestions"
+          defaultValue={initialValues.assignee}
+          placeholder="例: 山田太郎"
+          className={inputClassName}
+        />
+        <datalist id="task-assignee-suggestions">
+          {assigneeSuggestions.map((assignee) => (
+            <option key={assignee} value={assignee} />
+          ))}
+        </datalist>
+      </label>
+
+      <label className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-zinc-300">状態</span>
+        <select
+          name="status"
+          defaultValue={initialValues.status}
+          className={inputClassName}
+        >
+          {WBS_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="flex flex-col gap-2">
         <span className="text-sm font-medium text-zinc-300">大項目</span>
         <input

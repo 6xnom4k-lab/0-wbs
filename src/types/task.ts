@@ -1,3 +1,5 @@
+import type { WbsTaskStatus } from "@/types/wbs";
+
 export type TaskPriority = "high" | "medium" | "low";
 
 export type ProjectTask = {
@@ -6,6 +8,9 @@ export type ProjectTask = {
   category: string;
   title: string;
   detail: string;
+  assignee: string;
+  wbsNodeId: string;
+  status: WbsTaskStatus;
   priority: TaskPriority;
   startDate: string;
   endDate: string;
@@ -21,6 +26,9 @@ export type TaskInput = Pick<
   | "category"
   | "title"
   | "detail"
+  | "assignee"
+  | "wbsNodeId"
+  | "status"
   | "priority"
   | "startDate"
   | "endDate"

@@ -1,4 +1,5 @@
 import type { ProjectTask, TaskInput, TaskPriority } from "@/types/task";
+import type { UnifiedTask } from "@/types/unified-task";
 
 import { formatScheduledRange, validateScheduledRange } from "@/lib/google-calendar";
 
@@ -52,7 +53,7 @@ export function matchesTaskQuery(task: ProjectTask, query: string): boolean {
     return true;
   }
 
-  return [task.category, task.title, task.detail]
+  return [task.category, task.title, task.detail, task.assignee, task.wbsNodeId]
     .join(" ")
     .toLowerCase()
     .includes(normalizedQuery);
@@ -85,6 +86,9 @@ export function emptyTaskInput(): TaskInput {
     category: "",
     title: "",
     detail: "",
+    assignee: "",
+    wbsNodeId: "",
+    status: "not_started",
     priority: "medium",
     startDate: "",
     endDate: "",
@@ -99,6 +103,9 @@ export function toTaskInput(task: ProjectTask): TaskInput {
     category: task.category,
     title: task.title,
     detail: task.detail,
+    assignee: task.assignee,
+    wbsNodeId: task.wbsNodeId,
+    status: task.status,
     priority: task.priority,
     startDate: task.startDate,
     endDate: task.endDate,
@@ -106,4 +113,11 @@ export function toTaskInput(task: ProjectTask): TaskInput {
     scheduledEndAt: task.scheduledEndAt,
     googleCalendarEventUrl: task.googleCalendarEventUrl,
   };
+}
+
+export function formatUnifiedTaskScheduledAt(
+  task: Pick<UnifiedTask, "scheduledAt" | "scheduledEndAt">,
+): string {
+  const label = formatScheduledRange(task.scheduledAt, task.scheduledEndAt);
+  return label || "未設定";
 }

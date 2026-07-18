@@ -2,6 +2,7 @@ import type { ProjectTask, TaskInput } from "@/types/task";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { normalizeWbsStatus } from "@/lib/wbs-task-meta";
 import { createId } from "@/lib/wbs";
 
 const TASKS_STORAGE_KEY = "0-wbs:tasks";
@@ -12,6 +13,9 @@ type TaskRow = {
   category: string;
   title: string;
   detail: string;
+  assignee: string;
+  wbs_node_id: string;
+  status: ProjectTask["status"];
   priority: ProjectTask["priority"];
   start_date: string;
   end_date: string;
@@ -33,7 +37,7 @@ function readLocalTasks(): ProjectTask[] {
   }
 
   try {
-    return JSON.parse(raw) as ProjectTask[];
+    return (JSON.parse(raw) as ProjectTask[]).map(normalizeTask);
   } catch {
     return [];
   }
@@ -43,13 +47,28 @@ function writeLocalTasks(tasks: ProjectTask[]): void {
   window.localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
 }
 
-function rowToTask(row: TaskRow): ProjectTask {
+function normalizeTask(task: ProjectTask): ProjectTask {
   return {
+    ...task,
+    assignee: task.assignee ?? "",
+    wbsNodeId: task.wbsNodeId ?? "",
+    status: normalizeWbsStatus(task.status),
+    scheduledAt: task.scheduledAt ?? "",
+    scheduledEndAt: task.scheduledEndAt ?? "",
+    googleCalendarEventUrl: task.googleCalendarEventUrl ?? "",
+  };
+}
+
+function rowToTask(row: TaskRow): ProjectTask {
+  return normalizeTask({
     id: row.id,
     projectId: row.project_id,
     category: row.category,
     title: row.title,
     detail: row.detail,
+    assignee: row.assignee ?? "",
+    wbsNodeId: row.wbs_node_id ?? "",
+    status: row.status ?? "not_started",
     priority: row.priority,
     startDate: row.start_date,
     endDate: row.end_date,
@@ -58,7 +77,7 @@ function rowToTask(row: TaskRow): ProjectTask {
     googleCalendarEventUrl: row.google_calendar_event_url ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  });
 }
 
 function taskToRow(task: ProjectTask): TaskRow {
@@ -68,6 +87,9 @@ function taskToRow(task: ProjectTask): TaskRow {
     category: task.category,
     title: task.title,
     detail: task.detail,
+    assignee: task.assignee,
+    wbs_node_id: task.wbsNodeId,
+    status: task.status,
     priority: task.priority,
     start_date: task.startDate,
     end_date: task.endDate,
@@ -157,6 +179,9 @@ export async function createProjectTask(
     category: input.category.trim(),
     title: input.title.trim(),
     detail: input.detail.trim(),
+    assignee: input.assignee.trim(),
+    wbsNodeId: input.wbsNodeId.trim(),
+    status: normalizeWbsStatus(input.status),
     priority: input.priority,
     startDate: input.startDate,
     endDate: input.endDate,
@@ -227,6 +252,9 @@ export async function updateProjectTask(
     category: input.category.trim(),
     title: input.title.trim(),
     detail: input.detail.trim(),
+    assignee: input.assignee.trim(),
+    wbsNodeId: input.wbsNodeId.trim(),
+    status: normalizeWbsStatus(input.status),
     priority: input.priority,
     startDate: input.startDate,
     endDate: input.endDate,
